@@ -1,16 +1,3 @@
-[user]
-  name = Richard Huang
-  email = richardhuang.huang@gmail.com
-  signingkey = 05C2EC94
-
-[core]
-  editor = nvim
-  pager = diff-highlight | less -FRX
-  commentChar = ";"
-
-[commit]
-  gpgsign = true
-
 [pull]
   rebase = true
 
@@ -35,11 +22,24 @@
   required = true
   process = git-lfs filter-process
 
+# c = "!f() { git diff --name-only $(git merge-base HEAD origin/$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')) | while read file; do echo \"$(git rev-parse --show-toplevel)/$file\"; done; }; f"
+
+
 [alias]
-  a = add
-  aa = add --all
-  amend = commit --amend
-  b = branch
+  a = "!f() { git add -A && git branchless amend && git submit; }; f"
+  al = "!f() { git add -A && git branchless amend; }; f"
+  aa = "!f() { \
+      branch=$(echo \"$1\" | sed -E 's/\\[|\\]//g' | sed 's/ /_/g'); \
+      git switch -c \"$branch\" 2>/dev/null || git switch \"$branch\" || return 1; \
+      git add --all && \
+      commit_message=\"$1\" && \
+      git commit -m \"$commit_message\" && \
+      git push -u origin \"$branch\" && \
+      gh pr create --fill && \
+      gh pr view --web; \
+  }; f"
+  # amend = commit --amend
+  b = "!f() { git add --all && git commit -m "$1" && git push; }; f"
   bb = branch -a
   bc = "!f() { git branch --merged | grep -Ev '(^\\*|master|main)' | xargs -r git branch -d; }; f"
   bd = branch -d
@@ -48,21 +48,76 @@
   cherry-pit = "!f() { git rebase --rebase-merges --onto \"$1\"^ \"$1\"; }; f"
   cm = commit -m
   co = checkout
-  d = diff
   ec = config --global -e
   go = "!f() { git checkout -b \"$1\" 2> /dev/null || git checkout \"$1\"; }; f"
   l = log --relative-date --graph --abbrev-commit -10
   la = l --all
   ll = log --relative-date --graph --abbrev-commit
   lla = ll --all
-  p = push
   remotes = remote -v
-  s = status -s
+  s = status
   sd = d --cached
   sh = show --pretty=fuller
+  y = "!f() { git branchless init && git branchless sync -p --merge; }; f"
+  yy = "!f() { git branchless init && git branchless sync -p; }; f"
+  r = "!f() { git add -A && GIT_EDITOR=true git rebase --continue; }; f"
+  t = "!f() { git checkout --theirs "$(git rev-parse --show-toplevel)" && git add -A && GIT_EDITOR=true git rebase --continue; }; f"
+  ae = "!f() { git branchless init && git add -A && git amend; }; f"
+  aer = "!f() { git branchless init && git add -A && git amend --reparent; }; f"
+  rg = "!f() { git restack --merge; }; f"
+  p = submit
+  pp = push
+  pf = push --force
+  # st = stash -u
+  # sta = stash apply -u
+  j = sl
+  re = checkout -- .
+  d = diff
+  ad = add -A
+  c = commit --amend --no-edit
+  ac = "!f() { git add -A && git commit --amend --no-edit; }; f"
+  h = hide
+  m = '!sh git-move-file.sh'
+  n = next
+  v = prev
+  bu = "!f() { git branch --set-upstream-to=origin/$(git branch --show-current) && git pull; }; f"
+  st = stash -u
+  sa = stash apply -u
+  sp = stash pop
+  pr = "!f() { gh pr view --web; }; f"
 
 [format]
   pretty = format:%C(yellow)%h %Cblue%>(12)%ad %Cgreen%<(7)%aN%Cred%d %Creset%s
 
 [gpg]
   program = gpg
+  
+[user]
+	name = hakanalpaydd
+	email = hakan.alpay@doordash.com
+  
+[core]
+  # pager = diff-highlight | less -FRX
+  commentChar = ";"
+  excludesfile = ~/.gitignore-global
+  # sshCommand = ssh -i ~/.ssh/doordash_rsa
+	fsmonitor = true
+
+[rerere]
+	enabled = 1
+
+
+[http]
+	postBuffer = 524288000
+
+[includeIf "gitdir:~/code/macrowiki/"]
+    path = ~/.gitconfig-macrowiki
+[includeIf "gitdir:~/code/"]
+    path = ~/.gitconfig-personal
+[fetch]
+	prune = true
+[gitbutler]
+	aiModelProvider = openai
+[maintenance]
+	repo = /Users/hakan.alpay/Projects/consumer-client-api-gateway
+	repo = /Users/hakan.alpay/Projects/web-next

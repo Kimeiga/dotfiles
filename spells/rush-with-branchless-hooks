@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Function to restore hooks if in web-next repo
+fix_hooks() {
+    if git config --get remote.origin.url 2>/dev/null | grep -q "doordash/web-next"; then
+        echo "Restoring git-branchless hooks..."
+        git branchless init > /dev/null 2>&1
+        echo "Hooks restored"
+    fi
+}
+
+# Run the original rush command
+command rush "$@"
+RUSH_EXIT_CODE=$?
+
+# Fix hooks
+fix_hooks
+
+exit $RUSH_EXIT_CODE
