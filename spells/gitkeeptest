@@ -1,0 +1,204 @@
+#!/bin/bash
+
+set -e  # Exit on error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
+
+# Create a temporary directory for testing
+test_dir=$(mktemp -d)
+echo -e "${YELLOW}Creating test repository in${NC} $test_dir"
+
+# Function to clean up
+cleanup() {
+  echo -e "${YELLOW}Cleaning up...${NC}"
+  rm -rf "$test_dir"
+}
+
+# Register cleanup function
+trap cleanup EXIT
+
+# Copy the git-keep script to the temp directory
+cp ./git-keep "$test_dir/"
+chmod +x "$test_dir/git-keep"
+
+# Navigate to test directory
+cd "$test_dir"
+
+# Initialize test repository
+echo -e "${YELLOW}Initializing test repository...${NC}"
+git init
+git config user.name "Test User"
+git config user.email "test@example.com"
+
+# Create test files
+echo "Initial content" > file1.txt
+echo "Initial content" > file2.txt
+mkdir -p subdir
+echo "Initial content" > subdir/file3.txt
+echo "Initial content" > "file with spaces.txt"
+echo "Initial content" > "file_with_special_chars!@#.txt"
+
+# Add files to git
+git add .
+git commit -m "Initial commit"
+
+# Function to run a test case
+run_test() {
+  local test_name="$1"
+  local test_cmd="$2"
+  local verification="$3"
+
+  echo -e "\n${YELLOW}Running test:${NC} $test_name"
+  echo -e "${YELLOW}Command:${NC} $test_cmd"
+
+  # Run the command
+  eval "$test_cmd"
+
+  # Run verification
+  if eval "$verification"; then
+    echo -e "${GREEN}Test passed!${NC}"
+    return 0
+  else
+    echo -e "${RED}Test failed!${NC}"
+    return 1
+  fi
+}
+
+# Test 1: Working copy mode - keep a single file
+echo "Modified content" > file1.txt
+echo "Modified content" > file2.txt
+run_test "Keep single file in working copy" \
+  "./git-keep -y file1.txt" \
+  '[ "$(cat file1.txt)" = "Modified content" ] && [ "$(cat file2.txt)" = "Initial content" ]'
+
+# Reset for next test
+git checkout -- .
+
+# Test 2: Working copy mode - keep file with spaces
+echo "Modified content" > "file with spaces.txt"
+echo "Modified content" > file1.txt
+run_test "Keep file with spaces in working copy" \
+  "./git-keep -y 'file with spaces.txt'" \
+  '[ "$(cat "file with spaces.txt")" = "Modified content" ] && [ "$(cat file1.txt)" = "Initial content" ]'
+
+# Reset for next test
+git checkout -- .
+
+# Test 3: Working copy mode - keep file in subdirectory
+echo "Modified content" > subdir/file3.txt
+echo "Modified content" > file1.txt
+run_test "Keep file in subdirectory in working copy" \
+  "./git-keep -y subdir/file3.txt" \
+  '[ "$(cat subdir/file3.txt)" = "Modified content" ] && [ "$(cat file1.txt)" = "Initial content" ]'
+
+# Reset for next test
+git checkout -- .
+
+# Test 4: Working copy mode - keep file with special characters
+echo "Modified content" > "file_with_special_chars!@#.txt"
+echo "Modified content" > file1.txt
+run_test "Keep file with special characters in working copy" \
+  "./git-keep -y 'file_with_special_chars!@#.txt'" \
+  '[ "$(cat "file_with_special_chars!@#.txt")" = "Modified content" ] && [ "$(cat file1.txt)" = "Initial content" ]'
+
+# Reset for next test
+git checkout -- .
+
+# Test 5: Working copy mode - keep multiple files
+echo "Modified content" > file1.txt
+echo "Modified content" > file2.txt
+echo "Modified content" > subdir/file3.txt
+run_test "Keep multiple files in working copy" \
+  "./git-keep -y file1.txt subdir/file3.txt" \
+  '[ "$(cat file1.txt)" = "Modified content" ] && [ "$(cat subdir/file3.txt)" = "Modified content" ] && [ "$(cat file2.txt)" = "Initial content" ]'
+
+# Reset for next test
+git checkout -- .
+
+# Test 6: Commit mode - keep a single file
+echo "Modified content" > file1.txt
+echo "Modified content" > file2.txt
+git commit -am "Modify all files"
+run_test "Keep single file in commit mode" \
+  "./git-keep -y -C file1.txt" \
+  '[ "$(cat file1.txt)" = "Modified content" ] && [ "$(cat file2.txt)" = "Initial content" ]'
+
+# Reset for next test - go back to initial commit
+git reset --hard $(git rev-list --max-parents=0 HEAD)
+
+# Create a new commit for testing
+echo "Modified content" > file1.txt
+echo "Modified content" > file2.txt
+git commit -am "Modify all files"
+
+# Test 7: Commit mode - keep file with spaces
+run_test "Keep file with spaces in commit mode" \
+  "./git-keep -y -C 'file with spaces.txt'" \
+  '[ "$(cat "file with spaces.txt")" = "Initial content" ] && [ "$(cat file1.txt)" = "Initial content" ]'
+
+# Reset for next test - go back to initial commit
+git reset --hard $(git rev-list --max-parents=0 HEAD)
+
+# Create a new commit for testing
+echo "Modified content" > file1.txt
+echo "Modified content" > subdir/file3.txt
+git commit -am "Modify files including subdirectory"
+
+# Test 8: Commit mode - keep file in subdirectory
+run_test "Keep file in subdirectory in commit mode" \
+  "./git-keep -y -C subdir/file3.txt" \
+  '[ "$(cat subdir/file3.txt)" = "Modified content" ] && [ "$(cat file1.txt)" = "Initial content" ]'
+
+# Reset for next test - go back to initial commit
+git reset --hard $(git rev-list --max-parents=0 HEAD)
+
+# Create a new commit for testing
+echo "Modified content" > file1.txt
+echo "Modified content" > "file_with_special_chars!@#.txt"
+git commit -am "Modify files including special chars"
+
+# Test 9: Commit mode - keep file with special characters
+run_test "Keep file with special characters in commit mode" \
+  "./git-keep -y -C 'file_with_special_chars!@#.txt'" \
+  '[ "$(cat "file_with_special_chars!@#.txt")" = "Modified content" ] && [ "$(cat file1.txt)" = "Initial content" ]'
+
+# Reset for next test - go back to initial commit
+git reset --hard $(git rev-list --max-parents=0 HEAD)
+
+# Create a new commit for testing
+echo "Modified content" > file1.txt
+echo "Modified content" > file2.txt
+echo "Modified content" > subdir/file3.txt
+git commit -am "Modify all files"
+
+# Test 10: Commit mode - keep multiple files
+run_test "Keep multiple files in commit mode" \
+  "./git-keep -y -C file1.txt subdir/file3.txt" \
+  '[ "$(cat file1.txt)" = "Modified content" ] && [ "$(cat subdir/file3.txt)" = "Modified content" ] && [ "$(cat file2.txt)" = "Initial content" ]'
+
+# Test 11: Working copy mode - untracked files
+git reset --hard $(git rev-list --max-parents=0 HEAD)
+echo "New untracked file" > untracked.txt
+echo "Modified content" > file1.txt
+run_test "Handle untracked files in working copy" \
+  "./git-keep -y file1.txt" \
+  '[ "$(cat file1.txt)" = "Modified content" ] && [ ! -f untracked.txt ]'
+
+# Reset for next test
+git checkout -- .
+rm -f untracked.txt
+
+# Test 12: Working copy mode - deleted files
+git reset --hard $(git rev-list --max-parents=0 HEAD)
+rm file1.txt
+echo "Modified content" > file2.txt
+run_test "Handle deleted files in working copy" \
+  "./git-keep -y file2.txt" \
+  '[ "$(cat file2.txt)" = "Modified content" ] && [ -f file1.txt ]'
+
+# Overall test results
+echo -e "\n${GREEN}All tests completed!${NC}"

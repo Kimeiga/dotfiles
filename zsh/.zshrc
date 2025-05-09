@@ -267,3 +267,19 @@ a() {
 
 
 
+
+# Task Master aliases added on 4/28/2025
+alias tm='task-master'
+alias taskmaster='task-master'
+
+
+# load IT-provided staging environment credentials and PIP_EXTRA_INDEX_URL
+export ARTIFACTORY_USERNAME=hakan.alpay@doordash.com
+export ARTIFACTORY_PASSWORD=***REMOVED***
+
+# Environment variables for android repository
+export artifactoryUser=${ARTIFACTORY_USERNAME}
+export artifactoryPassword=${ARTIFACTORY_PASSWORD}
+
+export ARTIFACTORY_URL=https://${ARTIFACTORY_USERNAME/@/%40}:${ARTIFACTORY_PASSWORD}@ddartifacts.jfrog.io/ddartifacts/api/pypi/pypi-local/simple/
+export PIP_EXTRA_INDEX_URL=${ARTIFACTORY_URL}

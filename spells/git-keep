@@ -1,0 +1,310 @@
+#!/bin/bash
+
+set -e  # Exit on error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Function to print error messages
+error() {
+  echo -e "${RED}ERROR: $1${NC}" >&2
+  exit 1
+}
+
+# Function to print warning messages
+warn() {
+  echo -e "${YELLOW}WARNING: $1${NC}" >&2
+}
+
+# Function to print info messages
+info() {
+  echo -e "${BLUE}$1${NC}"
+}
+
+# Function to print success messages
+success() {
+  echo -e "${GREEN}$1${NC}"
+}
+
+# Function to show usage
+show_usage() {
+  echo "Usage: git keep [options] <file1> <file2> ..."
+  echo "Revert all changes except for the specified files"
+  echo ""
+  echo "Description:"
+  echo "  git-keep is a tool that allows you to selectively revert changes,"
+  echo "  keeping only the files you specify. It can operate on either the"
+  echo "  working copy (default) or the current commit."
+  echo ""
+  echo "Options:"
+  echo "  -C    Operate on current commit instead of working copy"
+  echo "  -n    Dry run - show what would happen without making changes"
+  echo "  -y    Skip confirmation prompt"
+  echo "  -h    Show this help message"
+  echo ""
+  echo "Examples:"
+  echo "  # Keep changes to file1.txt, revert all other changes in working copy"
+  echo "  git keep file1.txt"
+  echo ""
+  echo "  # Keep changes to multiple files"
+  echo "  git keep file1.txt path/to/file2.txt"
+  echo ""
+  echo "  # Keep changes to a file with spaces in the name"
+  echo "  git keep 'file with spaces.txt'"
+  echo ""
+  echo "  # Revert the current commit, keeping only changes to file1.txt"
+  echo "  git keep -C file1.txt"
+  echo ""
+  echo "  # Dry run to see what would happen without making changes"
+  echo "  git keep -n file1.txt"
+}
+
+# Process options
+use_commit=false
+dry_run=false
+skip_confirm=false
+
+while getopts "Cnyh" opt; do
+  case $opt in
+    C) use_commit=true ;;
+    n) dry_run=true ;;
+    y) skip_confirm=true ;;
+    h) show_usage; exit 0 ;;
+    *) show_usage; exit 1 ;;
+  esac
+done
+
+# Shift to remove options from arguments
+shift $((OPTIND-1))
+
+# Check if there are files specified
+if [ $# -eq 0 ]; then
+  error "No files specified to keep"
+  show_usage
+  exit 1
+fi
+
+# Store current directory
+original_dir=$(pwd)
+
+# Get git root directory
+git_root=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ $? -ne 0 ]; then
+  error "Not in a git repository"
+fi
+
+# Create temp directory
+tmp_dir=$(mktemp -d)
+if [ $? -ne 0 ]; then
+  error "Failed to create temporary directory"
+fi
+
+# Check if there are any changes to work with
+if ! $use_commit && [ -z "$(git status --porcelain)" ]; then
+  info "No changes in working directory. Nothing to do."
+  exit 0
+fi
+
+# Cleanup function
+cleanup() {
+  rm -rf "$tmp_dir"
+  cd "$original_dir" 2>/dev/null || true
+}
+
+# Set trap for cleanup
+trap cleanup EXIT
+
+# Change to git root
+cd "$git_root"
+
+# Get canonical paths for files to keep
+declare -a files_to_keep
+for file in "$@"; do
+  # Convert from user-provided path to path relative to git root
+  if [[ "$file" = /* ]]; then
+    # Absolute path - make relative to git root
+    rel_path="${file#$git_root/}"
+  else
+    # Relative path - could be relative to original_dir or already relative to git root
+    if [ -f "$original_dir/$file" ]; then
+      # Try resolving relative to original dir first
+      pushd "$original_dir" >/dev/null
+      abs_path=$(cd "$(dirname "$file")" && pwd)/$(basename "$file")
+      popd >/dev/null
+      rel_path="${abs_path#$git_root/}"
+    else
+      # Assume it's already relative to git root
+      rel_path="$file"
+    fi
+  fi
+
+  # Check if file exists in git
+  if git ls-files --error-unmatch "$rel_path" >/dev/null 2>&1; then
+    files_to_keep+=("$rel_path")
+  else
+    warn "File '$file' is not tracked by git or does not exist"
+  fi
+done
+
+# Check if we found any valid files to keep
+if [ ${#files_to_keep[@]} -eq 0 ]; then
+  error "No valid files to keep. Aborting."
+fi
+
+# Show summary of what will happen
+if $use_commit; then
+  info "Will revert commit $(git rev-parse --short HEAD), keeping the following files:"
+else
+  info "Will revert all changes in working copy, keeping the following files:"
+fi
+
+for file in "${files_to_keep[@]}"; do
+  echo "  - $file"
+done
+
+# Confirmation prompt unless -y flag was used
+if ! $skip_confirm && ! $dry_run; then
+  echo ""
+  read -p "Continue? [y/N] " confirm
+  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    info "Operation cancelled."
+    exit 0
+  fi
+fi
+
+# If dry run, exit here
+if $dry_run; then
+  info "Dry run complete. No changes were made."
+  exit 0
+fi
+
+if $use_commit; then
+  # Check if we're at the initial commit
+  if [ "$(git rev-parse HEAD)" = "$(git rev-list --max-parents=0 HEAD 2>/dev/null)" ]; then
+    error "Cannot use -C on the initial commit"
+  fi
+
+  # Check if HEAD^ exists
+  if ! git rev-parse HEAD^ &>/dev/null; then
+    error "Cannot find parent commit"
+  fi
+
+  # Get current commit hash for reference
+  current_commit=$(git rev-parse HEAD)
+  short_commit=$(git rev-parse --short HEAD)
+
+  # Save the files we want to keep
+  info "Saving files to keep..."
+  for file in "${files_to_keep[@]}"; do
+    if [ -f "$file" ]; then
+      mkdir -p "$tmp_dir/$(dirname "$file")"
+      cp -p "$file" "$tmp_dir/$file"
+    else
+      warn "File '$file' not found in current commit"
+    fi
+  done
+
+  # Revert the current commit
+  info "Reverting to parent commit..."
+  git reset --hard HEAD^
+
+  # Restore the saved files
+  info "Restoring kept files..."
+  for file in "${files_to_keep[@]}"; do
+    if [ -f "$tmp_dir/$file" ]; then
+      mkdir -p "$(dirname "$file")"
+      cp -p "$tmp_dir/$file" "$file"
+      git add "$file"
+      echo "  - Restored $file"
+    fi
+  done
+
+  success "Reverted commit $short_commit, keeping specified files"
+else
+  # Create a temporary file to store the list of files to keep
+  keep_list="$tmp_dir/keep_list.txt"
+  for file in "${files_to_keep[@]}"; do
+    # Store both the basename and full path for matching
+    basename "$file" >> "$keep_list"
+    echo "$file" >> "$keep_list"
+  done
+
+  # Get the list of modified files from git
+  all_modified=$(git status --porcelain)
+
+  # Process each modified file
+  modified_files=""
+  info "Identifying files to revert..."
+  while IFS= read -r line; do
+    if [ -z "$line" ]; then
+      continue
+    fi
+
+    status="${line:0:2}"
+    file_path="${line:3}"
+
+    # Remove quotes if present
+    clean_path=$(echo "$file_path" | sed 's/^"//;s/"$//')
+
+    # Check if this file should be kept
+    if grep -q "^$clean_path$" "$keep_list" || grep -q "^$(basename "$clean_path")$" "$keep_list"; then
+      echo "  - Keeping: $clean_path"
+    else
+      modified_files+="$line"$'\n'
+    fi
+  done <<< "$all_modified"
+
+  if [ -z "$modified_files" ]; then
+    info "No files to revert."
+    exit 0
+  fi
+
+  # Process each modified file
+  info "Reverting changes..."
+  echo "$modified_files" | while IFS= read -r line; do
+    # Skip empty lines
+    if [ -z "$line" ]; then
+      continue
+    fi
+
+    # Extract status and filename
+    status="${line:0:2}"
+    file="${line:3}"
+
+    # Remove quotes if present in the filename
+    file=$(echo "$file" | sed 's/^"//;s/"$//')
+
+    # Handle different statuses
+    case "$status" in
+      "M "| " M"|"MM"|"AM")
+        echo "  - Reverting changes in: $file"
+        git checkout -- "$file" || warn "Failed to revert changes in $file"
+        ;;
+      "??")
+        echo "  - Removing untracked file: $file"
+        rm -f "$file" || warn "Failed to remove $file"
+        ;;
+      "D ")
+        echo "  - Restoring deleted file: $file"
+        git checkout -- "$file" || warn "Failed to restore $file"
+        ;;
+      " D"|"MD")
+        echo "  - Restoring deleted file: $file"
+        git restore --staged "$file" && git checkout -- "$file" || warn "Failed to restore $file"
+        ;;
+      "A "|"AD")
+        echo "  - Removing staged new file: $file"
+        git restore --staged "$file" && rm -f "$file" || warn "Failed to remove $file"
+        ;;
+      *)
+        warn "Unhandled status '$status' for file '$file'"
+        ;;
+    esac
+  done
+
+  success "Reverted all changes except for specified files"
+fi

@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+if [ -z "$1" ]; then
+  echo "Usage: kp <port>"
+  echo "Kills the process running on the specified port"
+  exit 1
+fi
+
+PORT=$1
+PID=$(lsof -t -i:$PORT 2>/dev/null)
+
+if [ -z "$PID" ]; then
+  echo "No process found running on port $PORT"
+  exit 1
+fi
+
+echo "Killing process $PID running on port $PORT"
+kill -9 $PID
+echo "Process terminated"

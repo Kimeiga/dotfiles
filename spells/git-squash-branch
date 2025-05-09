@@ -1,0 +1,106 @@
+#!/bin/bash
+
+# git-apply-pr: Applies a GitHub PR as a single commit and optionally rebases a branch on top
+# Usage: git-apply-pr PR_NUMBER [YOUR_BRANCH] [--keep-temp]
+# Requirements: GitHub CLI (gh) must be installed and authenticated
+
+set -e  # Exit on any error
+
+# Parse arguments
+PR_NUMBER=$1
+if [ -z "$PR_NUMBER" ]; then
+  echo "Error: PR number is required"
+  echo "Usage: git-apply-pr PR_NUMBER [YOUR_BRANCH] [--keep-temp]"
+  exit 1
+fi
+
+# Check if gh CLI is installed
+if ! command -v gh &> /dev/null; then
+  echo "Error: GitHub CLI (gh) is not installed or not in PATH"
+  echo "Please install from https://cli.github.com/"
+  exit 1
+fi
+
+# Check for --keep-temp flag
+KEEP_TEMP=false
+for arg in "$@"; do
+  if [ "$arg" = "--keep-temp" ]; then
+    KEEP_TEMP=true
+  fi
+done
+
+# Get current branch
+CURRENT_BRANCH=$(git symbolic-ref --short HEAD)
+
+# Check if we're on a main branch (master or main)
+if [ "$CURRENT_BRANCH" = "master" ] || [ "$CURRENT_BRANCH" = "main" ]; then
+  IS_MAIN_BRANCH=true
+  MAIN_BRANCH=$CURRENT_BRANCH
+  echo "On $MAIN_BRANCH branch"
+else
+  IS_MAIN_BRANCH=false
+fi
+
+# Determine if we need to rebase a branch or just create the commit
+if [ -z "$2" ] || [[ "$2" == --* ]]; then
+  if [ "$IS_MAIN_BRANCH" = true ]; then
+    REBASE_NEEDED=false
+    echo "Will create commit without rebasing"
+  else
+    REBASE_NEEDED=true
+    YOUR_BRANCH=$CURRENT_BRANCH
+    echo "Using current branch for rebase: $YOUR_BRANCH"
+  fi
+else
+  REBASE_NEEDED=true
+  YOUR_BRANCH=$2
+  echo "Will rebase branch: $YOUR_BRANCH"
+fi
+
+# Create unique branch name with timestamp
+PATCH_BRANCH="pr-$PR_NUMBER-patch-$(date +%s)"
+
+# Make sure we're starting from the main branch
+if [ "$IS_MAIN_BRANCH" = false ]; then
+  echo "Checking out $MAIN_BRANCH to start clean"
+  git checkout $MAIN_BRANCH
+fi
+
+echo "Creating new branch for PR changes"
+git checkout -b $PATCH_BRANCH
+
+# Get PR patch and apply as a single commit
+echo "Fetching PR #$PR_NUMBER using GitHub CLI"
+PR_TITLE=$(gh pr view $PR_NUMBER --json title -q .title)
+PR_URL=$(gh pr view $PR_NUMBER --json url -q .url)
+
+echo "Applying PR changes as a single commit"
+gh pr diff $PR_NUMBER | git apply -
+git add --all
+git commit -m "Applied PR #$PR_NUMBER: $PR_TITLE
+
+$PR_URL"
+
+# If we need to rebase a branch, do it now
+if [ "$REBASE_NEEDED" = true ]; then
+  echo "Rebasing $YOUR_BRANCH onto the patched branch"
+  git checkout $YOUR_BRANCH
+  git rebase $PATCH_BRANCH
+  
+  echo "Success! Your branch $YOUR_BRANCH now includes the changes from PR #$PR_NUMBER"
+  
+  # Clean up the patch branch if not keeping temp branches
+  if [ "$KEEP_TEMP" = false ]; then
+    echo "Cleaning up patch branch"
+    git branch -D $PATCH_BRANCH
+  fi
+else
+  echo "Success! Created commit with changes from PR #$PR_NUMBER on branch $PATCH_BRANCH"
+  echo "You are now on branch $PATCH_BRANCH"
+fi
+
+if [ "$KEEP_TEMP" = true ] && [ "$REBASE_NEEDED" = true ]; then
+  echo ""
+  echo "Patch branch was kept due to --keep-temp flag:"
+  echo "- $PATCH_BRANCH (contains the PR changes as a single commit)"
+fi

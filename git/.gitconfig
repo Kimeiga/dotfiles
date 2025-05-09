@@ -41,12 +41,12 @@
   # amend = commit --amend
   b = "!f() { git add --all && git commit -m "$1" && git push; }; f"
   bb = branch -a
-  bc = "!f() { git branch --merged | grep -Ev '(^\\*|master|main)' | xargs -r git branch -d; }; f"
+  bcc = "!f() { git branch --merged | grep -Ev '(^\\*|master|main)' | xargs -r git branch -d; }; f"
   bd = branch -d
   bdf = "!f() { git branch | grep -v \"^*\" | fzf --height=20% --reverse --info=inline | xargs -r git branch -d; }; f"
   bf = "!f() { git branch --format='%(refname:short)|%(objectname:short)|%(contents:subject)' --sort=-committerdate | column -t -s '|' | grep -v \"^*\" | fzf --height=20% --reverse --info=inline | awk '{print $1}' | xargs -r git checkout; }; f"
   cherry-pit = "!f() { git rebase --rebase-merges --onto \"$1\"^ \"$1\"; }; f"
-  cm = commit -m
+  # cm = commit -m
   co = checkout
   ec = config --global -e
   go = "!f() { git checkout -b \"$1\" 2> /dev/null || git checkout \"$1\"; }; f"
@@ -76,6 +76,7 @@
   ad = add -A
   c = commit --amend --no-edit
   ac = "!f() { git add -A && git commit --amend --no-edit; }; f"
+  cm = "!f() { git add -A && git commit -m \"$1\"; }; f"
   h = hide
   m = '!sh git-move-file.sh'
   n = next
@@ -85,17 +86,20 @@
   sa = stash apply -u
   sp = stash pop
   pr = "!f() { gh pr view --web; }; f"
+  k = keep
+  squash-branch = git-squash-branch
+  bc =  "!f() { git diff $(git merge-base $(git show-ref --verify --quiet refs/heads/main && echo main || echo master) HEAD) HEAD; }; f"
 
 [format]
   pretty = format:%C(yellow)%h %Cblue%>(12)%ad %Cgreen%<(7)%aN%Cred%d %Creset%s
 
 [gpg]
   program = gpg
-  
+
 [user]
-	name = hakanalpaydd
+	name = Hakan Alpay
 	email = hakan.alpay@doordash.com
-  
+
 [core]
   # pager = diff-highlight | less -FRX
   commentChar = ";"
@@ -113,6 +117,8 @@
 [includeIf "gitdir:~/code/macrowiki/"]
     path = ~/.gitconfig-macrowiki
 [includeIf "gitdir:~/code/"]
+    path = ~/.gitconfig-personal
+[includeIf "gitdir:~/dotfiles/"]
     path = ~/.gitconfig-personal
 [fetch]
 	prune = true
