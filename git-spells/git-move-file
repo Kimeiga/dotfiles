@@ -1,10 +1,42 @@
 #!/bin/bash
 
-# git-move-file.sh - Move files to a different branch in an Aviator stack
-# Usage: git-move-file.sh <target_branch> <file1> [<file2> ...]
+# git-move-file - Move files to a different branch in an Aviator stack
+# Usage: git move-file [options] <target_branch> <file1> [<file2> ...]
+
+# Function to show usage
+show_usage() {
+    echo "Usage: git move-file [options] <target_branch> <file1> [<file2> ...]"
+    echo "Move files to a different branch in an Aviator stack"
+    echo ""
+    echo "Options:"
+    echo "  -h, --help    Show this help message"
+    echo ""
+    echo "Arguments:"
+    echo "  target_branch  The branch to move files to"
+    echo "  file1, file2   One or more files to move to the target branch"
+    echo ""
+    echo "Description:"
+    echo "  This command moves specific files from your current branch to another branch"
+    echo "  while preserving your other changes. It's useful when you've made changes to"
+    echo "  files that belong on a different branch in your stack."
+    echo ""
+    echo "Examples:"
+    echo "  # Move a file to another branch"
+    echo "  git move-file feature-branch path/to/file.js"
+    echo ""
+    echo "  # Move multiple files to another branch"
+    echo "  git move-file feature-branch file1.js file2.js"
+}
+
+# Process options
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    show_usage
+    exit 0
+fi
 
 if [ $# -lt 2 ]; then
-    echo "Usage: git-move-file.sh <target_branch> <file1> [<file2> ...]"
+    echo "Error: Not enough arguments"
+    show_usage
     exit 1
 fi
 
@@ -33,7 +65,7 @@ if [ -z "$STASH_HASH" ]; then
     STASH_HASH=$(git stash create)
     git reset .git_move_file_temp
     rm .git_move_file_temp
-    
+
     if [ -z "$STASH_HASH" ]; then
         echo "Failed to create stash"
         exit 1

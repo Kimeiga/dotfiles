@@ -1,0 +1,407 @@
+#!/bin/bash
+#
+# git-remove-large-file - Find and remove a large file from Git history
+#
+# This script helps you:
+# 1. Find which commit introduced a specific file
+# 2. Remove the file from Git history using git-filter-repo
+# 3. Add the file to .gitignore (if not already there)
+# 4. Preserve the file on disk
+#
+# Requirements: git-filter-repo (https://github.com/newren/git-filter-repo)
+
+set -e  # Exit on error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Function to print error messages
+error() {
+  echo -e "${RED}ERROR: $1${NC}" >&2
+  exit 1
+}
+
+# Function to print warning messages
+warn() {
+  echo -e "${YELLOW}WARNING: $1${NC}" >&2
+}
+
+# Function to print info messages
+info() {
+  echo -e "${BLUE}$1${NC}"
+}
+
+# Function to print success messages
+success() {
+  echo -e "${GREEN}$1${NC}"
+}
+
+# Function to show usage
+show_usage() {
+  echo "Usage: git remove-large-file [options] <file_path_or_pattern> [<file_path_or_pattern> ...]"
+  echo "Find and remove large files from Git history"
+  echo ""
+  echo "Options:"
+  echo "  -n    Dry run - show what would happen without making changes"
+  echo "  -y    Skip confirmation prompt"
+  echo "  -h    Show this help message"
+  echo "  -g    Treat the file paths as glob patterns (e.g., '*.jpg')"
+  echo ""
+  echo "Examples:"
+  echo "  # Remove a specific large file from Git history"
+  echo "  git remove-large-file path/to/large/file.bin"
+  echo ""
+  echo "  # Remove multiple specific files from Git history"
+  echo "  git remove-large-file file1.bin file2.json path/to/file3.pdf"
+  echo ""
+  echo "  # Remove all JPEG files from Git history"
+  echo "  git remove-large-file -g '*.jpg'"
+  echo ""
+  echo "  # Remove all files in a directory from Git history"
+  echo "  git remove-large-file -g 'path/to/dir/*'"
+  echo ""
+  echo "  # Remove multiple patterns from Git history"
+  echo "  git remove-large-file -g '*.jpg' '*.pdf' 'logs/*.log'"
+  echo ""
+  echo "  # Dry run to see what would happen"
+  echo "  git remove-large-file -n -g '*.pdf'"
+  echo ""
+  echo "Requirements:"
+  echo "  This command requires git-filter-repo to be installed."
+  echo "  Install it with: pip install git-filter-repo"
+}
+
+# Process options
+dry_run=false
+skip_confirm=false
+use_glob=false
+
+while getopts "nygh" opt; do
+  case $opt in
+    n) dry_run=true ;;
+    y) skip_confirm=true ;;
+    g) use_glob=true ;;
+    h) show_usage; exit 0 ;;
+    *) show_usage; exit 1 ;;
+  esac
+done
+
+# Shift to remove options from arguments
+shift $((OPTIND-1))
+
+# Check if at least one file path is provided
+if [ $# -eq 0 ]; then
+  error "No file path or pattern specified"
+  show_usage
+  exit 1
+fi
+
+# Store all file paths or patterns
+file_paths=("$@")
+
+# Check if git-filter-repo is installed
+if ! command -v git-filter-repo &> /dev/null; then
+  error "git-filter-repo is not installed. Install it with: pip install git-filter-repo"
+fi
+
+# Check if we're in a git repository
+git_root=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ $? -ne 0 ]; then
+  error "Not in a git repository"
+fi
+
+# Save remote information before we start
+# git-filter-repo removes remotes as a safety measure
+remote_info=$(git remote -v)
+has_origin=$(echo "$remote_info" | grep -q "^origin" && echo "true" || echo "false")
+if [ "$has_origin" = "true" ]; then
+  origin_url=$(git remote get-url origin)
+  info "Saving origin remote URL: $origin_url"
+fi
+
+# Change to git root
+cd "$git_root"
+
+# Create a temporary directory for backups
+temp_dir=$(mktemp -d)
+
+# Create a temporary file for paths to remove
+temp_paths_file=$(mktemp)
+
+# Function to process a single file
+process_file() {
+  local file_path="$1"
+  local is_glob="$2"
+  local files_to_remove=()
+  local files_to_ignore=()
+
+  if [ "$is_glob" = true ]; then
+    # Using glob pattern
+    info "Using glob pattern: '$file_path'"
+
+    # Get list of files matching the pattern
+    matching_files=$(git ls-files "$file_path" 2>/dev/null)
+
+    if [ -z "$matching_files" ]; then
+      warn "No files matching pattern '$file_path' found in Git history"
+      return 0
+    fi
+
+    # Count matching files
+    file_count=$(echo "$matching_files" | wc -l | tr -d ' ')
+    info "Found $file_count files matching the pattern"
+
+    # Show the first few matching files
+    echo "Sample of matching files:"
+    echo "$matching_files" | head -n 5
+
+    if [ "$file_count" -gt 5 ]; then
+      echo "... and $(($file_count - 5)) more"
+    fi
+
+    # Add files to the list
+    echo "$matching_files" >> "$temp_paths_file"
+
+    # Add pattern to ignore list
+    files_to_ignore+=("$file_path")
+
+    # Backup files if they exist
+    while IFS= read -r file; do
+      if [ -f "$file" ]; then
+        dir_path=$(dirname "$file")
+        mkdir -p "$temp_dir/$dir_path"
+        cp -p "$file" "$temp_dir/$dir_path/"
+      fi
+    done <<< "$matching_files"
+
+  else
+    # Single file mode
+    # Make file path relative to git root
+    local rel_path
+    if [[ "$file_path" = /* ]]; then
+      # Absolute path - make relative to git root
+      if [[ "$file_path" == "$git_root/"* ]]; then
+        rel_path="${file_path#$git_root/}"
+      else
+        # Absolute path outside git root - use basename
+        warn "File path is outside git repository root. Using basename."
+        rel_path="$(basename "$file_path")"
+      fi
+    else
+      # Already relative path
+      rel_path="$file_path"
+    fi
+
+    # Check if the file exists
+    if [ ! -f "$rel_path" ]; then
+      warn "File '$rel_path' does not exist in the current working directory"
+      if ! $skip_confirm; then
+        read -p "Continue anyway? [y/N] " continue_anyway
+        if [[ ! "$continue_anyway" =~ ^[Yy]$ ]]; then
+          return 0
+        fi
+      else
+        info "Continuing anyway due to -y flag"
+      fi
+    fi
+
+    # Find the commit that introduced the file
+    info "Finding commit that introduced '$rel_path'..."
+    commit_info=$(git log --diff-filter=A --format="%H %an %ad %s" -- "$rel_path" 2>/dev/null | head -n 1)
+
+    if [ -z "$commit_info" ]; then
+      warn "Could not find the commit that introduced '$rel_path'"
+      warn "The file might not be tracked by Git or might have been renamed"
+
+      # Check if the file is tracked by Git
+      if git ls-files --error-unmatch "$rel_path" &> /dev/null 2>&1; then
+        info "File is currently tracked by Git"
+        echo "$rel_path" >> "$temp_paths_file"
+        files_to_ignore+=("$rel_path")
+      else
+        info "File is not currently tracked by Git"
+
+        # Check if it was tracked before but deleted
+        if git log --all -- "$rel_path" &> /dev/null; then
+          info "File was tracked before but has been deleted"
+          echo "$rel_path" >> "$temp_paths_file"
+          files_to_ignore+=("$rel_path")
+        else
+          warn "File has never been tracked by Git. Nothing to remove from history."
+
+          # Add to .gitignore if not already there
+          if ! grep -q "^$rel_path$" .gitignore 2>/dev/null; then
+            info "Adding '$rel_path' to .gitignore..."
+            if ! $dry_run; then
+              echo "$rel_path" >> .gitignore
+              success "Added '$rel_path' to .gitignore"
+            else
+              info "Dry run: Would add '$rel_path' to .gitignore"
+            fi
+          else
+            info "File is already in .gitignore"
+          fi
+
+          return 0
+        fi
+      fi
+    else
+      commit_hash=$(echo "$commit_info" | awk '{print $1}')
+      commit_author=$(echo "$commit_info" | awk '{print $2}')
+      commit_date=$(echo "$commit_info" | awk '{$1=$2=""; print $0}' | sed 's/^  //')
+
+      info "File was introduced in commit:"
+      echo "  Commit: $commit_hash"
+      echo "  Author: $commit_author"
+      echo "  Date:   $commit_date"
+
+      # Add file to the list
+      echo "$rel_path" >> "$temp_paths_file"
+      files_to_ignore+=("$rel_path")
+    fi
+
+    # Check if the file is in .gitignore
+    if grep -q "^$rel_path$" .gitignore 2>/dev/null; then
+      info "File is already in .gitignore"
+    else
+      info "File is not in .gitignore"
+    fi
+
+    # Backup the file if it exists
+    if [ -f "$rel_path" ]; then
+      info "Backing up '$rel_path'..."
+      dir_path=$(dirname "$rel_path")
+      mkdir -p "$temp_dir/$dir_path"
+      cp -p "$rel_path" "$temp_dir/$dir_path/"
+    fi
+  fi
+
+  # Return the list of files to ignore
+  for file in "${files_to_ignore[@]}"; do
+    echo "$file"
+  done
+}
+
+# Process all file paths
+all_files_to_ignore=()
+for file_path in "${file_paths[@]}"; do
+  if $use_glob; then
+    files_to_ignore=$(process_file "$file_path" true)
+  else
+    files_to_ignore=$(process_file "$file_path" false)
+  fi
+
+  if [ -n "$files_to_ignore" ]; then
+    while IFS= read -r file; do
+      all_files_to_ignore+=("$file")
+    done <<< "$files_to_ignore"
+  fi
+done
+
+# Check if we have any files to remove
+if [ ! -s "$temp_paths_file" ]; then
+  warn "No files to remove from Git history"
+  rm -f "$temp_paths_file"
+  rm -rf "$temp_dir"
+  exit 0
+fi
+
+# Count total files to remove
+total_files=$(wc -l < "$temp_paths_file" | tr -d ' ')
+info "Total files to remove from Git history: $total_files"
+
+# Show the list of files to be removed
+echo ""
+info "Files to be removed from Git history:"
+if [ "$total_files" -le 100 ]; then
+  # Show all files if there are 100 or fewer
+  cat "$temp_paths_file" | while read -r file; do
+    echo "  - $file"
+  done
+else
+  # Show first 50 and last 50 if there are more than 100
+  echo "  (Showing first 50 and last 50 of $total_files files)"
+  head -n 50 "$temp_paths_file" | while read -r file; do
+    echo "  - $file"
+  done
+  echo "  ..."
+  tail -n 50 "$temp_paths_file" | while read -r file; do
+    echo "  - $file"
+  done
+fi
+
+# Show what we're going to do
+echo ""
+info "Actions to be performed:"
+echo "  1. Remove $total_files files from Git history"
+echo "  2. Add files to .gitignore if needed"
+echo "  3. Keep the files on disk"
+echo ""
+
+# Confirmation prompt unless -y flag was used
+if ! $skip_confirm && ! $dry_run; then
+  read -p "This will rewrite Git history. Continue? [y/N] " confirm
+  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    info "Operation cancelled."
+    rm -f "$temp_paths_file"
+    rm -rf "$temp_dir"
+    exit 0
+  fi
+fi
+
+# If dry run, exit here
+if $dry_run; then
+  info "Dry run complete. No changes were made."
+  rm -f "$temp_paths_file"
+  rm -rf "$temp_dir"
+  exit 0
+fi
+
+# Remove the files from Git history
+info "Removing files from Git history..."
+git filter-repo --paths-from-file "$temp_paths_file" --invert-paths --force
+
+# Add files to .gitignore
+if [ ${#all_files_to_ignore[@]} -gt 0 ]; then
+  info "Adding files to .gitignore..."
+  for file in "${all_files_to_ignore[@]}"; do
+    if ! grep -q "^$file$" .gitignore 2>/dev/null; then
+      echo "$file" >> .gitignore
+    fi
+  done
+  git add .gitignore
+  git commit -m "Add files to .gitignore"
+fi
+
+# Restore files from backup
+info "Restoring files from backup..."
+find "$temp_dir" -type f | while read -r backup_file; do
+  rel_file="${backup_file#$temp_dir/}"
+  if [ -n "$rel_file" ]; then
+    mkdir -p "$(dirname "$rel_file")"
+    cp -p "$backup_file" "$rel_file"
+  fi
+done
+
+# Clean up
+rm -f "$temp_paths_file"
+rm -rf "$temp_dir"
+
+# Restore the origin remote if it existed
+if [ "$has_origin" = "true" ]; then
+  info "Restoring origin remote..."
+  if ! git remote | grep -q "^origin$"; then
+    git remote add origin "$origin_url"
+    success "Restored origin remote: $origin_url"
+  else
+    info "Origin remote already exists, no need to restore"
+  fi
+fi
+
+success "Successfully removed $total_files files from Git history"
+info "Note: This has rewritten Git history. If you've already pushed to a remote, you'll need to force push."
+info "      Use 'git push --force-with-lease' to safely force push."

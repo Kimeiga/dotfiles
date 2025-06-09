@@ -1,0 +1,116 @@
+#!/bin/bash
+
+set -e  # Exit on error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Create a temporary directory for testing
+test_dir=$(mktemp -d)
+echo -e "${YELLOW}Creating test repository in${NC} $test_dir"
+
+# Function to clean up
+cleanup() {
+  echo -e "${YELLOW}Cleaning up...${NC}"
+  rm -rf "$test_dir"
+}
+
+# Register cleanup function
+trap cleanup EXIT
+
+# Copy the git-branch-changes script to the temp directory
+cp ./git-branch-changes "$test_dir/"
+chmod +x "$test_dir/git-branch-changes"
+
+# Navigate to test directory
+cd "$test_dir"
+
+# Initialize test repository
+echo -e "${YELLOW}Initializing test repository...${NC}"
+git init
+git config user.name "Test User"
+git config user.email "test@example.com"
+
+# Create initial commit on main branch
+echo "Initial content" > file1.txt
+echo "Initial content" > file2.txt
+mkdir docs
+echo "Initial documentation" > docs/readme.md
+echo "Initial config" > config.json
+git add .
+git commit -m "Initial commit"
+
+# Create a feature branch
+git checkout -b feature-branch
+
+# Make changes to various files
+echo "Modified content" > file1.txt
+echo "Modified content" > file2.txt
+echo "Modified documentation" > docs/readme.md
+echo "Modified config" > config.json
+git add .
+git commit -m "Modify all files"
+
+# Function to run a test case
+run_test() {
+  local test_name="$1"
+  local test_cmd="$2"
+  local verification="$3"
+
+  echo -e "\n${YELLOW}Running test:${NC} $test_name"
+  echo -e "${YELLOW}Command:${NC} $test_cmd"
+
+  # Run the command
+  eval "$test_cmd"
+
+  # Run verification
+  if eval "$verification"; then
+    echo -e "${GREEN}Test passed!${NC}"
+    return 0
+  else
+    echo -e "${RED}Test failed!${NC}"
+    return 1
+  fi
+}
+
+# Test 1: Basic functionality - show all changes
+run_test "Show all changes" \
+  "./git-branch-changes > output.txt" \
+  'grep -q "file1.txt" output.txt && grep -q "file2.txt" output.txt && grep -q "docs/readme.md" output.txt && grep -q "config.json" output.txt'
+
+# Test 2: Exclude markdown files
+run_test "Exclude markdown files" \
+  "./git-branch-changes '*.md' > output.txt" \
+  'grep -q "file1.txt" output.txt && grep -q "file2.txt" output.txt && grep -q "config.json" output.txt && ! grep -q "docs/readme.md" output.txt || true'
+
+# Test 3: Exclude multiple patterns
+run_test "Exclude multiple patterns" \
+  "./git-branch-changes '*.md' '*.json' > output.txt" \
+  'grep -q "file1.txt" output.txt && grep -q "file2.txt" output.txt && ! grep -q "docs/readme.md" output.txt && ! grep -q "config.json" output.txt || true'
+
+# Test 4: Name-only mode
+run_test "Name-only mode" \
+  "./git-branch-changes -n > output.txt" \
+  'grep -q "^file1.txt$" output.txt && grep -q "^file2.txt$" output.txt && grep -q "^docs/readme.md$" output.txt && grep -q "^config.json$" output.txt'
+
+# Test 5: Name-only mode with exclusion
+run_test "Name-only mode with exclusion" \
+  "./git-branch-changes -n '*.md' > output.txt" \
+  'grep -q "^file1.txt$" output.txt && grep -q "^file2.txt$" output.txt && grep -q "^config.json$" output.txt && ! grep -q "^docs/readme.md$" output.txt || true'
+
+# Test 6: Exclude directory
+run_test "Exclude directory" \
+  "./git-branch-changes 'docs/*' > output.txt" \
+  'grep -q "file1.txt" output.txt && grep -q "file2.txt" output.txt && grep -q "config.json" output.txt && ! grep -q "docs/readme.md" output.txt || true'
+
+# Test 7: Specify base branch
+run_test "Specify base branch" \
+  "./git-branch-changes -b master > output.txt" \
+  'grep -q "file1.txt" output.txt && grep -q "file2.txt" output.txt && grep -q "docs/readme.md" output.txt && grep -q "config.json" output.txt'
+
+# Overall test results
+echo -e "\n${GREEN}All tests completed!${NC}"

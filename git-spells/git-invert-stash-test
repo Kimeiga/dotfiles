@@ -1,0 +1,247 @@
+#!/bin/bash
+
+set -e  # Exit on error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
+
+# Create a temporary directory for testing
+test_dir=$(mktemp -d)
+echo -e "${YELLOW}Creating test repository in${NC} $test_dir"
+
+# Function to clean up
+cleanup() {
+  echo -e "${YELLOW}Cleaning up...${NC}"
+  rm -rf "$test_dir"
+}
+
+# Register cleanup function
+trap cleanup EXIT
+
+# Copy the git-invert-stash script to the temp directory
+cp ./git-invert-stash "$test_dir/"
+chmod +x "$test_dir/git-invert-stash"
+
+# Navigate to test directory
+cd "$test_dir"
+
+# Initialize test repository
+echo -e "${YELLOW}Initializing test repository...${NC}"
+git init
+git config user.name "Test User"
+git config user.email "test@example.com"
+
+# Create initial test files
+echo "Line 1" > file1.txt
+echo "Line 2" >> file1.txt
+echo "Line 3" >> file1.txt
+
+echo "Content A" > file2.txt
+echo "Content B" >> file2.txt
+
+mkdir -p subdir
+echo "Subdirectory content" > subdir/file3.txt
+
+# Add files to git
+git add .
+git commit -m "Initial commit"
+
+# Function to run a test case
+run_test() {
+  local test_name="$1"
+  local test_cmd="$2"
+  local verification="$3"
+
+  echo -e "\n${YELLOW}Running test:${NC} $test_name"
+  echo -e "${YELLOW}Command:${NC} $test_cmd"
+
+  # Run the command
+  if eval "$test_cmd"; then
+    # Run verification
+    if eval "$verification"; then
+      echo -e "${GREEN}Test passed!${NC}"
+      return 0
+    else
+      echo -e "${RED}Test failed! Verification failed.${NC}"
+      return 1
+    fi
+  else
+    echo -e "${RED}Test failed! Command failed.${NC}"
+    return 1
+  fi
+}
+
+# Function to verify stash inversion
+verify_inversion() {
+  local original_diff="$1"
+  local inverted_stash_ref="$2"
+  
+  # Get the inverted stash diff
+  local inverted_diff=$(git stash show -p "$inverted_stash_ref")
+  
+  # Check if additions became deletions and vice versa
+  local original_additions=$(echo "$original_diff" | grep "^+" | grep -v "^+++" | wc -l)
+  local original_deletions=$(echo "$original_diff" | grep "^-" | grep -v "^---" | wc -l)
+  local inverted_additions=$(echo "$inverted_diff" | grep "^+" | grep -v "^+++" | wc -l)
+  local inverted_deletions=$(echo "$inverted_diff" | grep "^-" | grep -v "^---" | wc -l)
+  
+  # Additions should become deletions and vice versa
+  [ "$original_additions" -eq "$inverted_deletions" ] && [ "$original_deletions" -eq "$inverted_additions" ]
+}
+
+# Test 1: Invert stash with additions
+echo -e "\n${YELLOW}=== Test 1: Invert stash with additions ===${NC}"
+echo "New line 4" >> file1.txt
+echo "New content C" >> file2.txt
+git stash -u
+
+# Store original diff for verification
+original_diff=$(git stash show -p stash@{0})
+
+run_test "Invert stash with additions" \
+  "./git-invert-stash -y" \
+  'verify_inversion "$original_diff" "stash@{0}"'
+
+# Clean up stash
+git stash drop
+
+# Test 2: Invert stash with deletions
+echo -e "\n${YELLOW}=== Test 2: Invert stash with deletions ===${NC}"
+# Remove some lines
+sed -i '' '2d' file1.txt  # Remove line 2
+sed -i '' '1d' file2.txt  # Remove first line
+git stash -u
+
+original_diff=$(git stash show -p stash@{0})
+
+run_test "Invert stash with deletions" \
+  "./git-invert-stash -y" \
+  'verify_inversion "$original_diff" "stash@{0}"'
+
+git stash drop
+
+# Test 3: Invert stash with mixed changes
+echo -e "\n${YELLOW}=== Test 3: Invert stash with mixed changes ===${NC}"
+# Mix of additions, deletions, and modifications
+echo "Added line" >> file1.txt
+sed -i '' '1s/.*/Modified first line/' file1.txt
+sed -i '' '2d' file2.txt
+echo "New file content" > newfile.txt
+git stash -u
+
+original_diff=$(git stash show -p stash@{0})
+
+run_test "Invert stash with mixed changes" \
+  "./git-invert-stash -y" \
+  'verify_inversion "$original_diff" "stash@{0}"'
+
+git stash drop
+
+# Test 4: Invert specific stash (not most recent)
+echo -e "\n${YELLOW}=== Test 4: Invert specific stash ===${NC}"
+# Create multiple stashes
+echo "First stash change" >> file1.txt
+git stash -m "First stash"
+
+echo "Second stash change" >> file2.txt
+git stash -m "Second stash"
+
+# Invert the first stash (stash@{1})
+original_diff=$(git stash show -p stash@{1})
+
+run_test "Invert specific stash (stash@{1})" \
+  "./git-invert-stash -y stash@{1}" \
+  'verify_inversion "$original_diff" "stash@{0}"'
+
+# Clean up stashes
+git stash clear
+
+# Test 5: Dry run mode
+echo -e "\n${YELLOW}=== Test 5: Dry run mode ===${NC}"
+echo "Dry run test" >> file1.txt
+git stash -u
+
+# Count stashes before dry run
+stash_count_before=$(git stash list | wc -l)
+
+run_test "Dry run mode" \
+  "./git-invert-stash -n" \
+  '[ $(git stash list | wc -l) -eq $stash_count_before ]'
+
+git stash drop
+
+# Test 6: Error handling - non-existent stash
+echo -e "\n${YELLOW}=== Test 6: Error handling - non-existent stash ===${NC}"
+run_test "Handle non-existent stash" \
+  "! ./git-invert-stash -y stash@{99} 2>/dev/null" \
+  "true"
+
+# Test 7: Error handling - empty stash
+echo -e "\n${YELLOW}=== Test 7: Error handling - empty repository ===${NC}"
+# Create a new empty repository
+empty_repo=$(mktemp -d)
+cd "$empty_repo"
+git init
+git config user.name "Test User"
+git config user.email "test@example.com"
+cp "$test_dir/git-invert-stash" .
+
+run_test "Handle empty repository (no stashes)" \
+  "! ./git-invert-stash -y 2>/dev/null" \
+  "true"
+
+# Return to main test directory
+cd "$test_dir"
+rm -rf "$empty_repo"
+
+# Test 8: Verify stash message preservation
+echo -e "\n${YELLOW}=== Test 8: Verify stash message preservation ===${NC}"
+echo "Message test" >> file1.txt
+git stash -m "Custom stash message"
+
+run_test "Preserve stash message with INVERTED prefix" \
+  "./git-invert-stash -y" \
+  'git stash list | head -1 | grep -q "INVERTED: Custom stash message"'
+
+git stash drop
+
+# Test 9: Test with files containing spaces and special characters
+echo -e "\n${YELLOW}=== Test 9: Files with spaces and special characters ===${NC}"
+echo "Content" > "file with spaces.txt"
+echo "Content" > "file!@#\$%^&*().txt"
+git add .
+git commit -m "Add files with special names"
+
+echo "Modified" >> "file with spaces.txt"
+echo "Modified" >> "file!@#\$%^&*().txt"
+git stash -u
+
+original_diff=$(git stash show -p stash@{0})
+
+run_test "Handle files with spaces and special characters" \
+  "./git-invert-stash -y" \
+  'verify_inversion "$original_diff" "stash@{0}"'
+
+git stash drop
+
+# Test 10: Test with subdirectory files
+echo -e "\n${YELLOW}=== Test 10: Subdirectory files ===${NC}"
+echo "Modified subdirectory content" >> subdir/file3.txt
+mkdir -p subdir/nested
+echo "Nested content" > subdir/nested/file4.txt
+git stash -u
+
+original_diff=$(git stash show -p stash@{0})
+
+run_test "Handle subdirectory files" \
+  "./git-invert-stash -y" \
+  'verify_inversion "$original_diff" "stash@{0}"'
+
+git stash drop
+
+# Overall test results
+echo -e "\n${GREEN}All tests completed!${NC}"
+echo -e "${GREEN}git-invert-stash appears to be working correctly.${NC}"

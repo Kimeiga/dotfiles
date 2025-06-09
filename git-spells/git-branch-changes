@@ -1,0 +1,295 @@
+#!/bin/bash
+#
+# git-branch-changes - Show changes between current branch and main/master with filtering
+#
+# This script helps you:
+# 1. View the diff between your current branch and main/master
+# 2. Filter out specific files or patterns using grep
+# 3. Focus on relevant changes by excluding files like README.md, etc.
+#
+# This is an enhanced version of the 'bc' alias from .gitconfig:
+# bc = "!f() { git diff $(git merge-base $(git show-ref --verify --quiet refs/heads/main && echo main || echo master) HEAD) HEAD; }; f"
+
+set -e  # Exit on error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Function to print error messages
+error() {
+  echo -e "${RED}ERROR: $1${NC}" >&2
+  exit 1
+}
+
+# Function to print warning messages
+warn() {
+  echo -e "${YELLOW}WARNING: $1${NC}" >&2
+}
+
+# Function to print info messages
+info() {
+  echo -e "${BLUE}INFO: $1${NC}" >&2
+}
+
+# Function to print success messages
+success() {
+  echo -e "${GREEN}SUCCESS: $1${NC}" >&2
+}
+
+# Function to show usage
+show_usage() {
+  echo "Usage: git branch-changes [options] [exclude_pattern1] [exclude_pattern2] ..."
+  echo "Show changes between current branch and main/master with filtering"
+  echo ""
+  echo "Options:"
+  echo "  -b, --base <branch>  Specify base branch (default: main or master)"
+  echo "  -c, --copy           Copy output to clipboard (requires pbcopy)"
+  echo "  -n, --name-only      Show only names of changed files"
+  echo "  -d, --debug          Show debug information"
+  echo "  -h, --help           Show this help message"
+  echo ""
+  echo "Arguments:"
+  echo "  exclude_pattern      Pattern(s) of files to exclude from diff (e.g., '*.md')"
+  echo ""
+  echo "Description:"
+  echo "  This command shows the diff between your current branch and the main/master branch,"
+  echo "  with the ability to exclude files matching specified patterns."
+  echo ""
+  echo "Examples:"
+  echo "  # Show all changes between current branch and main/master"
+  echo "  git branch-changes"
+  echo ""
+  echo "  # Show changes excluding markdown files"
+  echo "  git branch-changes '*.md'"
+  echo ""
+  echo "  # Show changes excluding multiple patterns"
+  echo "  git branch-changes '*.md' '*.json' 'docs/*'"
+  echo ""
+  echo "  # Show changes against a specific base branch"
+  echo "  git branch-changes -b develop"
+  echo ""
+  echo "  # Show only names of changed files, excluding markdown files"
+  echo "  git branch-changes -n '*.md'"
+  echo ""
+  echo "  # Copy changes to clipboard, excluding markdown and JSON files"
+  echo "  git branch-changes -c '*.md' '*.json'"
+}
+
+# Process options
+base_branch=""
+copy_to_clipboard=false
+name_only=false
+debug_mode=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -b|--base)
+      base_branch="$2"
+      shift 2
+      ;;
+    -c|--copy)
+      copy_to_clipboard=true
+      shift
+      ;;
+    -n|--name-only)
+      name_only=true
+      shift
+      ;;
+    -d|--debug)
+      debug_mode=true
+      shift
+      ;;
+    -h|--help)
+      show_usage
+      exit 0
+      ;;
+    -*)
+      error "Unknown option: $1"
+      show_usage
+      exit 1
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+# Determine base branch if not specified
+if [ -z "$base_branch" ]; then
+  if git show-ref --verify --quiet refs/heads/main; then
+    base_branch="main"
+  elif git show-ref --verify --quiet refs/heads/master; then
+    base_branch="master"
+  else
+    error "Could not determine main branch. Please specify with -b option."
+  fi
+fi
+
+# Get the merge base
+merge_base=$(git merge-base "$base_branch" HEAD)
+if [ $? -ne 0 ]; then
+  error "Failed to find merge base with branch '$base_branch'"
+fi
+
+# Process exclude patterns
+exclude_patterns=("$@")
+if [ ${#exclude_patterns[@]} -gt 0 ]; then
+  info "Excluding patterns: ${exclude_patterns[*]}"
+fi
+
+# Handle name-only mode
+if $name_only; then
+  # Get list of changed files
+  files=$(git diff --name-only "$merge_base" HEAD)
+
+  # If no files, exit
+  if [ -z "$files" ]; then
+    info "No changes detected between current branch and $base_branch"
+    echo ""
+    exit 0
+  fi
+
+  # Filter out excluded files
+  if [ ${#exclude_patterns[@]} -gt 0 ]; then
+    # Create a temporary file for grep
+    temp_exclude=$(mktemp)
+
+    # Build grep pattern for all exclude patterns
+    for pattern in "${exclude_patterns[@]}"; do
+      echo "$pattern" >> "$temp_exclude"
+    done
+
+    # Filter files using grep
+    filtered_files=$(echo "$files" | grep -v -f "$temp_exclude" || echo "")
+
+    # Clean up
+    rm "$temp_exclude"
+
+    # Use filtered files
+    files="$filtered_files"
+  fi
+
+  # Output the result
+  if [ -z "$files" ]; then
+    info "No files match after applying filters"
+    echo ""
+    exit 0
+  fi
+
+  if $copy_to_clipboard; then
+    if ! command -v pbcopy &> /dev/null; then
+      error "pbcopy command not found. Cannot copy to clipboard."
+    fi
+    echo "$files" | pbcopy
+    info "Filtered file list copied to clipboard"
+  else
+    echo "$files"
+  fi
+
+  exit 0
+fi
+
+# Handle full diff mode
+# Get the list of changed files
+changed_files=$(git diff --name-only "$merge_base" HEAD)
+
+# If no files, exit
+if [ -z "$changed_files" ]; then
+  info "No changes detected between current branch and $base_branch"
+  echo ""
+  exit 0
+fi
+
+# Debug output
+if $debug_mode; then
+  info "All changed files (first 10):"
+  echo "$changed_files" | head -n 10 >&2
+  total_files=$(echo "$changed_files" | wc -l | tr -d ' ')
+  if [ $total_files -gt 10 ]; then
+    info "... and $((total_files - 10)) more files"
+  fi
+fi
+
+# If no exclude patterns, just run the diff command
+if [ ${#exclude_patterns[@]} -eq 0 ]; then
+  diff_output=$(git diff "$merge_base" HEAD)
+else
+  # Filter out files matching exclude patterns
+  filtered_files=""
+
+  # Process each file
+  while IFS= read -r file; do
+    exclude=false
+
+    # Check if file matches any exclude pattern
+    for pattern in "${exclude_patterns[@]}"; do
+      # Convert glob pattern to shell pattern
+      if [[ "$file" == *$pattern ]]; then
+        exclude=true
+        if $debug_mode; then
+          info "Excluding file: $file"
+        fi
+        break
+      fi
+    done
+
+    # If file doesn't match any pattern, include it
+    if ! $exclude; then
+      filtered_files+="$file"$'\n'
+      if $debug_mode; then
+        info "Including file: $file"
+      fi
+    fi
+  done <<< "$changed_files"
+
+  # Remove trailing newline
+  filtered_files=${filtered_files%$'\n'}
+
+  # If no files left after filtering, exit
+  if [ -z "$filtered_files" ]; then
+    info "No files match after applying filters"
+    echo ""
+    exit 0
+  fi
+
+  # Get diff for only the filtered files
+  # Convert the file list to space-separated for git diff
+  file_args=$(echo "$filtered_files" | tr '\n' ' ')
+
+  # Get the diff for only these files
+  diff_output=$(git diff "$merge_base" HEAD -- $file_args)
+
+  # If debug mode is enabled, show more information about the diff
+  if $debug_mode; then
+    # Check if there are any actual changes in the filtered files
+    if [ -z "$diff_output" ]; then
+      info "No actual changes found in the filtered files"
+      info "This means the only files with changes are the ones you excluded"
+    else
+      info "Found changes in the filtered files"
+    fi
+  fi
+fi
+
+# Output the result
+if [ -z "$diff_output" ]; then
+  info "No changes after applying filters"
+  echo ""
+  exit 0
+fi
+
+if $copy_to_clipboard; then
+  if ! command -v pbcopy &> /dev/null; then
+    error "pbcopy command not found. Cannot copy to clipboard."
+  fi
+  echo "$diff_output" | pbcopy
+  info "Filtered changes copied to clipboard"
+else
+  echo "$diff_output"
+fi
+
+exit 0

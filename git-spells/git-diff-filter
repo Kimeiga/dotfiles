@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# Filter JSON files from git diff and copy to clipboard
+# Usage: git diff-filter [options] [base_branch]
+
+# Function to show usage
+show_usage() {
+  echo "Usage: git diff-filter [options] [base_branch]"
+  echo "Filter JSON files from git diff and copy to clipboard"
+  echo ""
+  echo "Options:"
+  echo "  -h, --help    Show this help message"
+  echo ""
+  echo "Arguments:"
+  echo "  base_branch   Branch to diff against (default: master)"
+  echo ""
+  echo "Description:"
+  echo "  This command runs git diff against the specified base branch,"
+  echo "  filters out any changes to JSON files, and copies the result"
+  echo "  to the clipboard. This is useful when reviewing changes that"
+  echo "  include large JSON files like package-lock.json."
+  echo ""
+  echo "Examples:"
+  echo "  # Filter JSON files from diff against master"
+  echo "  git diff-filter"
+  echo ""
+  echo "  # Filter JSON files from diff against develop branch"
+  echo "  git diff-filter develop"
+}
+
+# Process options
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+  show_usage
+  exit 0
+fi
+
+BASE_BRANCH=${1:-master}
+
+# Run git diff and process in a single stream
+git diff "$BASE_BRANCH" | awk '
+BEGIN {
+  skip = 0;
+  json_pattern = "\\.json($|[[:space:]])";
+}
+/^diff --git/ {
+  if ($0 ~ json_pattern) {
+    skip = 1;
+  } else {
+    skip = 0;
+    print;
+  }
+  next;
+}
+{ if (skip == 0) print; }
+' | pbcopy
+
+echo "Filtered diff copied to clipboard (JSON files removed)"

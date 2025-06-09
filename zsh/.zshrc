@@ -36,7 +36,7 @@ SAVEHIST=10000
 # Environment Variables
 export EDITOR=nvim
 export GOPATH=$HOME/go
-export PATH=$PATH:$HOME/dotfiles/av:$HOME/dotfiles/spells:$GOPATH/bin:$HOME/bin:$HOME/.cargo/bin:$HOME/.npm-global/bin:$PATH
+export PATH=$PATH:$HOME/dotfiles/av:$HOME/dotfiles/spells:$HOME/dotfiles/git-spells:$GOPATH/bin:$HOME/bin:$HOME/.cargo/bin:$HOME/.npm-global/bin:$PATH
 export LESSHISTFILE=-
 export GPG_TTY=$(tty)
 export BAT_THEME=base16
@@ -180,12 +180,12 @@ if [ -x "$(command -v kubectl)" ]; then
     unfunction kubectl
     source <(command kubectl completion zsh)
     if [ -x "$(command -v kubecolor)" ]; then
-      compdef kubecolor=kubectl 
+      compdef kubecolor=kubectl
       alias kubectl='kubecolor'
     fi
     command kubectl "$@"
   }
-  
+
   alias k='kubectl'
 fi
 
@@ -207,7 +207,7 @@ bindkey "\e[3~" delete-char
 
 # Stack workflow functions
 transform_branch_to_commit_msg() {
-    echo "$1" | 
+    echo "$1" |
         sed 's/_/ /g' |
         sed -E 's/^([A-Z]+-[0-9]+)(.*)/[\1]\2/'
 }
@@ -283,3 +283,8 @@ export artifactoryPassword=${ARTIFACTORY_PASSWORD}
 
 export ARTIFACTORY_URL=https://${ARTIFACTORY_USERNAME/@/%40}:${ARTIFACTORY_PASSWORD}@ddartifacts.jfrog.io/ddartifacts/api/pypi/pypi-local/simple/
 export PIP_EXTRA_INDEX_URL=${ARTIFACTORY_URL}
+# The next line updates PATH for the Google Cloud SDK.
+if [ -f '/Users/hakan.alpay/Downloads/google-cloud-sdk 2/path.zsh.inc' ]; then . '/Users/hakan.alpay/Downloads/google-cloud-sdk 2/path.zsh.inc'; fi
+
+# The next line enables shell command completion for gcloud.
+if [ -f '/Users/hakan.alpay/Downloads/google-cloud-sdk 2/completion.zsh.inc' ]; then . '/Users/hakan.alpay/Downloads/google-cloud-sdk 2/completion.zsh.inc'; fi

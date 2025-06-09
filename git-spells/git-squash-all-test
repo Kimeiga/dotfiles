@@ -1,0 +1,186 @@
+#!/bin/bash
+#
+# Test script for git-squash-all
+#
+
+set -e  # Exit on error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Create a temporary directory for testing
+test_dir=$(mktemp -d)
+echo -e "${BLUE}Created test directory:${NC} $test_dir"
+
+# Function to clean up the test directory
+cleanup() {
+  echo -e "${BLUE}Cleaning up test directory...${NC}"
+  rm -rf "$test_dir"
+}
+
+# Register cleanup function
+trap cleanup EXIT
+
+# Copy the git-squash-all script to the temp directory
+cp ./git-squash-all "$test_dir/"
+chmod +x "$test_dir/git-squash-all"
+
+# Navigate to test directory
+cd "$test_dir"
+
+# Initialize test repository
+echo -e "${YELLOW}Initializing test repository...${NC}"
+git init
+git config user.name "Test User"
+git config user.email "test@example.com"
+
+# Create initial commit on main branch
+echo "Initial content" > file1.txt
+git add .
+git commit -m "Initial commit"
+
+# Function to run a test case
+run_test() {
+  local test_name="$1"
+  local test_cmd="$2"
+  local verification="$3"
+
+  echo -e "\n${YELLOW}Running test:${NC} $test_name"
+  echo -e "${YELLOW}Command:${NC} $test_cmd"
+
+  # Run the command
+  eval "$test_cmd"
+
+  # Run verification
+  if eval "$verification"; then
+    echo -e "${GREEN}Test passed!${NC}"
+    return 0
+  else
+    echo -e "${RED}Test failed!${NC}"
+    return 1
+  fi
+}
+
+# Test 1: Simple branch with multiple commits
+echo -e "\n${YELLOW}Test 1: Simple branch with multiple commits${NC}"
+git checkout -b feature-branch
+echo "Feature content 1" > file2.txt
+git add .
+git commit -m "Add feature file 2"
+echo "Feature content 2" > file3.txt
+git add .
+git commit -m "Add feature file 3"
+echo "Feature content 3" > file4.txt
+git add .
+git commit -m "Add feature file 4"
+
+# Verify we have 3 commits on the feature branch
+commit_count=$(git rev-list --count master..HEAD)
+echo "Commit count before squash: $commit_count"
+if [ "$commit_count" -ne 3 ]; then
+  echo -e "${RED}Test setup failed: Expected 3 commits, got $commit_count${NC}"
+  exit 1
+fi
+
+# Run git-squash-all in dry-run mode
+run_test "Dry run mode" \
+  "./git-squash-all --dry-run" \
+  'echo "Dry run should not change commit count"; git rev-list --count master..HEAD | grep -q "3"'
+
+# Run git-squash-all with auto-confirmation
+echo "y" | ./git-squash-all
+
+# Verify we now have 1 commit on the feature branch
+commit_count=$(git rev-list --count master..HEAD)
+echo "Commit count after squash: $commit_count"
+if [ "$commit_count" -ne 1 ]; then
+  echo -e "${RED}Test failed: Expected 1 commit after squash, got $commit_count${NC}"
+  exit 1
+fi
+
+# Verify all files still exist
+if [ ! -f file2.txt ] || [ ! -f file3.txt ] || [ ! -f file4.txt ]; then
+  echo -e "${RED}Test failed: Not all files exist after squash${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}Test 1 passed: Successfully squashed commits on simple branch${NC}"
+
+# Test 2: Nested branches
+echo -e "\n${YELLOW}Test 2: Nested branches${NC}"
+git checkout master
+git checkout -b intermediate-branch
+echo "Intermediate content" > intermediate.txt
+git add .
+git commit -m "Add intermediate file"
+
+git checkout -b nested-branch
+echo "Nested content 1" > nested1.txt
+git add .
+git commit -m "Add nested file 1"
+echo "Nested content 2" > nested2.txt
+git add .
+git commit -m "Add nested file 2"
+
+# Verify we have 2 commits on the nested branch compared to intermediate
+commit_count=$(git rev-list --count intermediate-branch..HEAD)
+echo "Commit count before squash: $commit_count"
+if [ "$commit_count" -ne 2 ]; then
+  echo -e "${RED}Test setup failed: Expected 2 commits, got $commit_count${NC}"
+  exit 1
+fi
+
+# Run git-squash-all with auto-confirmation
+echo "y" | ./git-squash-all
+
+# Verify we now have 1 commit on the nested branch compared to intermediate
+commit_count=$(git rev-list --count intermediate-branch..HEAD)
+echo "Commit count after squash: $commit_count"
+if [ "$commit_count" -ne 1 ]; then
+  echo -e "${RED}Test failed: Expected 1 commit after squash, got $commit_count${NC}"
+  exit 1
+fi
+
+# Verify all files still exist
+if [ ! -f nested1.txt ] || [ ! -f nested2.txt ]; then
+  echo -e "${RED}Test failed: Not all files exist after squash${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}Test 2 passed: Successfully squashed commits on nested branch${NC}"
+
+# Test 3: Specify base branch
+echo -e "\n${YELLOW}Test 3: Specify base branch${NC}"
+git checkout master
+git checkout -b another-branch
+echo "Another content" > another.txt
+git add .
+git commit -m "Add another file"
+
+git checkout -b specific-base-branch
+echo "Specific content 1" > specific1.txt
+git add .
+git commit -m "Add specific file 1"
+echo "Specific content 2" > specific2.txt
+git add .
+git commit -m "Add specific file 2"
+
+# Run git-squash-all with specified base branch and auto-confirmation
+echo "y" | ./git-squash-all -b another-branch
+
+# Verify we now have 1 commit on the specific branch compared to another-branch
+commit_count=$(git rev-list --count another-branch..HEAD)
+echo "Commit count after squash: $commit_count"
+if [ "$commit_count" -ne 1 ]; then
+  echo -e "${RED}Test failed: Expected 1 commit after squash, got $commit_count${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}Test 3 passed: Successfully squashed commits with specified base branch${NC}"
+
+# Overall test results
+echo -e "\n${GREEN}All tests completed!${NC}"

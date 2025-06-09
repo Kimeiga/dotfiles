@@ -1,0 +1,277 @@
+#!/bin/bash
+
+# Test script for git-find-branch
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Test counters
+TESTS_RUN=0
+TESTS_PASSED=0
+TESTS_FAILED=0
+
+# Function to print test results
+print_test_result() {
+  local test_name="$1"
+  local result="$2"
+  
+  TESTS_RUN=$((TESTS_RUN + 1))
+  
+  if [ "$result" = "PASS" ]; then
+    echo -e "${GREEN}✓ PASS${NC}: $test_name"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+  else
+    echo -e "${RED}✗ FAIL${NC}: $test_name"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+  fi
+}
+
+# Function to run a test
+run_test() {
+  local test_name="$1"
+  local test_command="$2"
+  local expected_exit_code="${3:-0}"
+  
+  echo -e "${BLUE}Running test: $test_name${NC}"
+  
+  if eval "$test_command" >/dev/null 2>&1; then
+    actual_exit_code=0
+  else
+    actual_exit_code=$?
+  fi
+  
+  if [ "$actual_exit_code" -eq "$expected_exit_code" ]; then
+    print_test_result "$test_name" "PASS"
+  else
+    print_test_result "$test_name" "FAIL"
+    echo "  Expected exit code: $expected_exit_code, got: $actual_exit_code"
+  fi
+}
+
+# Function to test help output
+test_help_output() {
+  local test_name="Help output contains usage information"
+  echo -e "${BLUE}Running test: $test_name${NC}"
+  
+  local help_output
+  help_output=$(./git-find-branch -h 2>&1 || true)
+  
+  if echo "$help_output" | grep -q "Usage:" && echo "$help_output" | grep -q "find-branch"; then
+    print_test_result "$test_name" "PASS"
+  else
+    print_test_result "$test_name" "FAIL"
+    echo "  Help output doesn't contain expected usage information"
+  fi
+}
+
+# Function to test error handling
+test_error_handling() {
+  local test_name="Error when no branch names provided"
+  echo -e "${BLUE}Running test: $test_name${NC}"
+  
+  local error_output
+  error_output=$(./git-find-branch 2>&1 || true)
+  
+  if echo "$error_output" | grep -q "ERROR.*No branch names specified"; then
+    print_test_result "$test_name" "PASS"
+  else
+    print_test_result "$test_name" "FAIL"
+    echo "  Expected error message not found"
+  fi
+}
+
+# Function to test invalid depth
+test_invalid_depth() {
+  local test_name="Error when invalid depth provided"
+  echo -e "${BLUE}Running test: $test_name${NC}"
+  
+  local error_output
+  error_output=$(./git-find-branch -d abc test-branch 2>&1 || true)
+  
+  if echo "$error_output" | grep -q "ERROR.*Depth must be a positive integer"; then
+    print_test_result "$test_name" "PASS"
+  else
+    print_test_result "$test_name" "FAIL"
+    echo "  Expected error message not found"
+  fi
+}
+
+# Function to create test environment
+setup_test_environment() {
+  echo -e "${YELLOW}Setting up test environment...${NC}"
+  
+  # Create temporary directory for testing
+  TEST_DIR=$(mktemp -d)
+  cd "$TEST_DIR"
+  
+  # Create a few test repositories
+  mkdir -p repo1 repo2 subdir/repo3
+  
+  # Initialize repo1 with some branches
+  cd repo1
+  git init >/dev/null 2>&1
+  git config user.email "test@example.com"
+  git config user.name "Test User"
+  echo "test" > file1.txt
+  git add file1.txt
+  git commit -m "Initial commit" >/dev/null 2>&1
+  git checkout -b feature-branch >/dev/null 2>&1
+  echo "feature" > feature.txt
+  git add feature.txt
+  git commit -m "Feature commit" >/dev/null 2>&1
+  git checkout -b another-branch >/dev/null 2>&1
+  git checkout main >/dev/null 2>&1 || git checkout master >/dev/null 2>&1
+  
+  # Initialize repo2 with different branches
+  cd ../repo2
+  git init >/dev/null 2>&1
+  git config user.email "test@example.com"
+  git config user.name "Test User"
+  echo "test" > file2.txt
+  git add file2.txt
+  git commit -m "Initial commit" >/dev/null 2>&1
+  git checkout -b bugfix-branch >/dev/null 2>&1
+  git checkout -b feature-branch >/dev/null 2>&1  # Same name as repo1
+  git checkout main >/dev/null 2>&1 || git checkout master >/dev/null 2>&1
+  
+  # Initialize repo3 in subdirectory
+  cd ../subdir/repo3
+  git init >/dev/null 2>&1
+  git config user.email "test@example.com"
+  git config user.name "Test User"
+  echo "test" > file3.txt
+  git add file3.txt
+  git commit -m "Initial commit" >/dev/null 2>&1
+  git checkout -b unique-branch >/dev/null 2>&1
+  git checkout main >/dev/null 2>&1 || git checkout master >/dev/null 2>&1
+  
+  cd "$TEST_DIR"
+  
+  # Copy the git-find-branch script to test directory
+  cp "$ORIGINAL_DIR/git-spells/git-find-branch" .
+  
+  echo -e "${GREEN}Test environment created at: $TEST_DIR${NC}"
+}
+
+# Function to cleanup test environment
+cleanup_test_environment() {
+  if [ -n "$TEST_DIR" ] && [ -d "$TEST_DIR" ]; then
+    rm -rf "$TEST_DIR"
+    echo -e "${YELLOW}Test environment cleaned up${NC}"
+  fi
+}
+
+# Function to test basic functionality
+test_basic_functionality() {
+  local test_name="Find existing branch in multiple repos"
+  echo -e "${BLUE}Running test: $test_name${NC}"
+  
+  local output
+  output=$(./git-find-branch feature-branch 2>&1)
+  
+  if echo "$output" | grep -q "repo1" && echo "$output" | grep -q "repo2"; then
+    print_test_result "$test_name" "PASS"
+  else
+    print_test_result "$test_name" "FAIL"
+    echo "  Expected to find feature-branch in repo1 and repo2"
+  fi
+}
+
+# Function to test unique branch
+test_unique_branch() {
+  local test_name="Find branch that exists in only one repo"
+  echo -e "${BLUE}Running test: $test_name${NC}"
+  
+  local output
+  output=$(./git-find-branch unique-branch 2>&1)
+  
+  if echo "$output" | grep -q "subdir/repo3" && ! echo "$output" | grep -q "repo1" && ! echo "$output" | grep -q "repo2"; then
+    print_test_result "$test_name" "PASS"
+  else
+    print_test_result "$test_name" "FAIL"
+    echo "  Expected to find unique-branch only in subdir/repo3"
+  fi
+}
+
+# Function to test nonexistent branch
+test_nonexistent_branch() {
+  local test_name="Handle nonexistent branch gracefully"
+  echo -e "${BLUE}Running test: $test_name${NC}"
+  
+  local output
+  output=$(./git-find-branch nonexistent-branch 2>&1)
+  
+  if echo "$output" | grep -q "No repositories found containing"; then
+    print_test_result "$test_name" "PASS"
+  else
+    print_test_result "$test_name" "FAIL"
+    echo "  Expected message about no repositories found"
+  fi
+}
+
+# Function to test verbose output
+test_verbose_output() {
+  local test_name="Verbose output shows branch details"
+  echo -e "${BLUE}Running test: $test_name${NC}"
+  
+  local output
+  output=$(./git-find-branch -v feature-branch 2>&1)
+  
+  if echo "$output" | grep -q "feature-branch"; then
+    print_test_result "$test_name" "PASS"
+  else
+    print_test_result "$test_name" "FAIL"
+    echo "  Expected verbose output to show branch details"
+  fi
+}
+
+# Main test execution
+main() {
+  echo -e "${BLUE}Starting git-find-branch tests...${NC}"
+  echo ""
+  
+  # Store original directory
+  ORIGINAL_DIR=$(pwd)
+  
+  # Set up trap for cleanup
+  trap 'cleanup_test_environment; cd "$ORIGINAL_DIR"' EXIT
+  
+  # Test help and error handling (don't need test environment)
+  cd "$ORIGINAL_DIR/git-spells"
+  test_help_output
+  test_error_handling
+  test_invalid_depth
+  
+  # Set up test environment for functional tests
+  setup_test_environment
+  
+  # Run functional tests
+  test_basic_functionality
+  test_unique_branch
+  test_nonexistent_branch
+  test_verbose_output
+  
+  # Print summary
+  echo ""
+  echo -e "${BLUE}Test Summary:${NC}"
+  echo "  Tests run: $TESTS_RUN"
+  echo -e "  Passed: ${GREEN}$TESTS_PASSED${NC}"
+  echo -e "  Failed: ${RED}$TESTS_FAILED${NC}"
+  
+  if [ $TESTS_FAILED -eq 0 ]; then
+    echo -e "${GREEN}All tests passed!${NC}"
+    exit 0
+  else
+    echo -e "${RED}Some tests failed.${NC}"
+    exit 1
+  fi
+}
+
+# Run main function
+main "$@"

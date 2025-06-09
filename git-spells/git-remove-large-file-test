@@ -1,0 +1,170 @@
+#!/bin/bash
+
+set -e  # Exit on error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Create a temporary directory for testing
+test_dir=$(mktemp -d)
+echo -e "${YELLOW}Creating test repository in${NC} $test_dir"
+
+# Function to clean up
+cleanup() {
+  echo -e "${YELLOW}Cleaning up...${NC}"
+  rm -rf "$test_dir"
+}
+
+# Register cleanup function
+trap cleanup EXIT
+
+# Copy the git-remove-large-file script to the temp directory
+cp ./git-remove-large-file "$test_dir/"
+chmod +x "$test_dir/git-remove-large-file"
+
+# Navigate to test directory
+cd "$test_dir"
+
+# Initialize test repository
+echo -e "${YELLOW}Initializing test repository...${NC}"
+git init
+git config user.name "Test User"
+git config user.email "test@example.com"
+
+# Create a mock git-filter-repo command for testing
+# This avoids the need to actually install git-filter-repo
+cat > git-filter-repo << 'EOF'
+#!/bin/bash
+echo "Mock git-filter-repo called with args: $@"
+# Just pretend we did the filtering
+exit 0
+EOF
+chmod +x git-filter-repo
+export PATH="$test_dir:$PATH"
+
+# Function to run a test case
+run_test() {
+  local test_name="$1"
+  local setup="$2"
+  local test_cmd="$3"
+  local verification="$4"
+
+  echo -e "\n${YELLOW}Running test:${NC} $test_name"
+
+  # Reset the repository for each test
+  rm -rf .git .gitignore
+  git init
+  git config user.name "Test User"
+  git config user.email "test@example.com"
+
+  # Run setup
+  if [ -n "$setup" ]; then
+    echo -e "${BLUE}Setup:${NC}"
+    eval "$setup"
+  fi
+
+  echo -e "${YELLOW}Command:${NC} $test_cmd"
+
+  # Run the command
+  eval "$test_cmd"
+
+  # Run verification
+  if eval "$verification"; then
+    echo -e "${GREEN}Test passed!${NC}"
+    return 0
+  else
+    echo -e "${RED}Test failed!${NC}"
+    return 1
+  fi
+}
+
+# Test 1: Basic functionality - remove a file from history
+run_test "Basic file removal" \
+  'echo "Large content" > large_file.bin && git add large_file.bin && git commit -m "Add large file"' \
+  "./git-remove-large-file -y large_file.bin" \
+  '[ -f large_file.bin ] && [ -f .gitignore ] && grep -q "large_file.bin" .gitignore'
+
+# Test 2: File with spaces in name
+run_test "File with spaces in name" \
+  'echo "Large content" > "large file with spaces.bin" && git add "large file with spaces.bin" && git commit -m "Add file with spaces"' \
+  "./git-remove-large-file -y 'large file with spaces.bin'" \
+  '[ -f "large file with spaces.bin" ] && grep -q "large file with spaces.bin" .gitignore'
+
+# Test 3: File in subdirectory
+run_test "File in subdirectory" \
+  'mkdir -p subdir && echo "Large content" > subdir/large_file.bin && git add subdir/large_file.bin && git commit -m "Add large file in subdir"' \
+  "./git-remove-large-file -y subdir/large_file.bin" \
+  '[ -f subdir/large_file.bin ] && grep -q "subdir/large_file.bin" .gitignore'
+
+# Test 4: File with special characters
+run_test "File with special characters" \
+  'echo "Large content" > "large_file!@#.bin" && git add "large_file!@#.bin" && git commit -m "Add file with special chars"' \
+  "./git-remove-large-file -y 'large_file!@#.bin'" \
+  '[ -f "large_file!@#.bin" ] && grep -q "large_file!@#.bin" .gitignore'
+
+# Test 5: File already in .gitignore
+run_test "File already in .gitignore" \
+  'echo "Large content" > already_ignored.bin && echo "already_ignored.bin" > .gitignore && git add .gitignore && git add -f already_ignored.bin && git commit -m "Add ignored file"' \
+  "./git-remove-large-file -y already_ignored.bin" \
+  '[ -f already_ignored.bin ] && grep -q "already_ignored.bin" .gitignore'
+
+# Test 6: File not tracked by Git
+run_test "File not tracked by Git" \
+  'echo "Untracked content" > untracked.bin' \
+  "./git-remove-large-file -y untracked.bin" \
+  '[ -f untracked.bin ] && grep -q "untracked.bin" .gitignore'
+
+# Test 7: File added in a non-initial commit
+run_test "File added in a non-initial commit" \
+  'echo "Initial file" > initial.txt && git add initial.txt && git commit -m "Initial commit" && echo "Large content" > later_large_file.bin && git add later_large_file.bin && git commit -m "Add large file later"' \
+  "./git-remove-large-file -y later_large_file.bin" \
+  '[ -f later_large_file.bin ] && grep -q "later_large_file.bin" .gitignore'
+
+# Test 8: File that was renamed
+run_test "File that was renamed" \
+  'echo "Large content" > original_name.bin && git add original_name.bin && git commit -m "Add with original name" && git mv original_name.bin renamed.bin && git commit -m "Rename file"' \
+  "./git-remove-large-file -y renamed.bin" \
+  '[ -f renamed.bin ] && grep -q "renamed.bin" .gitignore'
+
+# Test 9: File that was deleted in a later commit
+run_test "File that was deleted in a later commit" \
+  'echo "Large content" > deleted_later.bin && git add deleted_later.bin && git commit -m "Add file" && git rm deleted_later.bin && git commit -m "Delete file"' \
+  "./git-remove-large-file -y deleted_later.bin" \
+  'grep -q "deleted_later.bin" .gitignore'
+
+# Test 10: Absolute path to file
+run_test "Absolute path to file" \
+  'echo "Large content" > abs_path.bin && git add abs_path.bin && git commit -m "Add file for abs path test"' \
+  "./git-remove-large-file -y $test_dir/abs_path.bin" \
+  '[ -f abs_path.bin ] && grep -q "abs_path.bin" .gitignore'
+
+# Test 11: Dry run mode
+run_test "Dry run mode" \
+  'echo "Large content" > dryrun.bin && git add dryrun.bin && git commit -m "Add file for dry run test"' \
+  "./git-remove-large-file -n dryrun.bin" \
+  'git ls-files | grep -q "dryrun.bin" && ! grep -q "dryrun.bin" .gitignore'
+
+# Test 12: Multiple commits with the same file
+run_test "Multiple commits with the same file" \
+  'echo "Initial content" > multi_commit.bin && git add multi_commit.bin && git commit -m "Add file" && echo "Updated content" > multi_commit.bin && git add multi_commit.bin && git commit -m "Update file"' \
+  "./git-remove-large-file -y multi_commit.bin" \
+  '[ -f multi_commit.bin ] && grep -q "multi_commit.bin" .gitignore'
+
+# Test 13: Glob pattern - remove all files with specific extension
+run_test "Glob pattern - remove all files with specific extension" \
+  'mkdir -p glob_test && echo "File 1" > glob_test/file1.jpg && echo "File 2" > glob_test/file2.jpg && echo "File 3" > glob_test/file3.txt && git add glob_test && git commit -m "Add files for glob test"' \
+  "./git-remove-large-file -y -g '*.jpg'" \
+  '[ -f glob_test/file1.jpg ] && [ -f glob_test/file2.jpg ] && [ -f glob_test/file3.txt ] && grep -q "*.jpg" .gitignore && ! git ls-files | grep -q "file1.jpg" && ! git ls-files | grep -q "file2.jpg" && git ls-files | grep -q "file3.txt"'
+
+# Test 14: Glob pattern - remove all files in a directory
+run_test "Glob pattern - remove all files in a directory" \
+  'mkdir -p dir_glob_test/subdir && echo "File 1" > dir_glob_test/file1.txt && echo "File 2" > dir_glob_test/subdir/file2.txt && git add dir_glob_test && git commit -m "Add directory for glob test"' \
+  "./git-remove-large-file -y -g 'dir_glob_test/*'" \
+  '[ -f dir_glob_test/file1.txt ] && [ -f dir_glob_test/subdir/file2.txt ] && grep -q "dir_glob_test/*" .gitignore && ! git ls-files | grep -q "dir_glob_test/file1.txt"'
+
+# Overall test results
+echo -e "\n${GREEN}All tests completed!${NC}"

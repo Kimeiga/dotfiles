@@ -1,0 +1,230 @@
+#!/bin/bash
+#
+# git-squash-all - Automatically squash all commits in the current branch
+#
+# This script helps you:
+# 1. Find the base branch from which your current branch diverged
+# 2. Count the number of commits unique to your branch
+# 3. Perform a git reset --soft HEAD~N where N is that number
+# 4. Works with complex branch hierarchies (branches off branches)
+#
+
+set -e  # Exit on error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Function to print error messages
+error() {
+  echo -e "${RED}ERROR: $1${NC}" >&2
+  exit 1
+}
+
+# Function to print info messages
+info() {
+  echo -e "${BLUE}INFO: $1${NC}"
+}
+
+# Function to print success messages
+success() {
+  echo -e "${GREEN}SUCCESS: $1${NC}"
+}
+
+# Function to print warning messages
+warning() {
+  echo -e "${YELLOW}WARNING: $1${NC}"
+}
+
+# Function to show usage
+show_usage() {
+  echo "Usage: git squash-all [options]"
+  echo "Automatically squash all commits in the current branch"
+  echo ""
+  echo "Options:"
+  echo "  -h, --help           Show this help message"
+  echo "  -n, --dry-run        Show what would happen without making changes"
+  echo "  -b, --base <branch>  Specify a base branch to find the merge point"
+  echo "                       (default: auto-detect main/master or find nearest branch)"
+  echo "  -m, --message <msg>  Specify commit message for the squashed commit"
+  echo "                       (default: concatenate all commit messages)"
+  echo ""
+  echo "Description:"
+  echo "  This command automatically squashes all commits in your current branch"
+  echo "  by finding the point where it diverged from the main branch or another"
+  echo "  branch in its lineage. It works with complex branch hierarchies where"
+  echo "  your branch might be based on another branch that's based on main."
+  echo ""
+  echo "Examples:"
+  echo "  # Squash all commits in the current branch"
+  echo "  git squash-all"
+  echo ""
+  echo "  # Dry run to see what would happen"
+  echo "  git squash-all --dry-run"
+  echo ""
+  echo "  # Specify a base branch"
+  echo "  git squash-all --base develop"
+  echo ""
+  echo "  # Specify a commit message"
+  echo "  git squash-all --message \"Implement feature X\""
+}
+
+# Process options
+dry_run=false
+base_branch=""
+commit_message=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      show_usage
+      exit 0
+      ;;
+    -n|--dry-run)
+      dry_run=true
+      shift
+      ;;
+    -b|--base)
+      base_branch="$2"
+      shift 2
+      ;;
+    -m|--message)
+      commit_message="$2"
+      shift 2
+      ;;
+    *)
+      error "Unknown option: $1"
+      show_usage
+      exit 1
+      ;;
+  esac
+done
+
+# Get current branch
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+if [ "$current_branch" = "HEAD" ]; then
+  error "You are in detached HEAD state. Please checkout a branch first."
+fi
+
+# Determine base branch if not specified
+if [ -z "$base_branch" ]; then
+  # Try to find main/master
+  if git show-ref --verify --quiet refs/heads/main; then
+    main_branch="main"
+  elif git show-ref --verify --quiet refs/heads/master; then
+    main_branch="master"
+  else
+    error "Could not determine main branch. Please specify with -b option."
+  fi
+
+  # Find the merge-base with main/master
+  merge_base_main=$(git merge-base "$main_branch" HEAD 2>/dev/null || echo "")
+
+  # Get all local branches
+  all_branches=$(git for-each-ref --format='%(refname:short)' refs/heads/ | grep -v "^$current_branch$")
+
+  # Find the closest branch in the lineage
+  closest_branch=""
+  closest_commit_count=999999
+
+  for branch in $all_branches; do
+    # Skip main/master as we already checked it
+    if [ "$branch" = "$main_branch" ]; then
+      continue
+    fi
+
+    # Find merge-base with this branch
+    merge_base=$(git merge-base "$branch" HEAD 2>/dev/null || echo "")
+
+    # If no merge-base, skip
+    if [ -z "$merge_base" ]; then
+      continue
+    fi
+
+    # Count commits between merge-base and HEAD
+    commit_count=$(git rev-list --count "$merge_base..HEAD")
+
+    # If this branch is closer than the current closest, update
+    if [ "$commit_count" -lt "$closest_commit_count" ]; then
+      # Make sure this branch is in our lineage (merge-base is ahead of main merge-base)
+      if [ -z "$merge_base_main" ] || git merge-base --is-ancestor "$merge_base_main" "$merge_base" 2>/dev/null; then
+        closest_branch="$branch"
+        closest_commit_count="$commit_count"
+      fi
+    fi
+  done
+
+  # Use the closest branch or fall back to main/master
+  if [ -n "$closest_branch" ]; then
+    base_branch="$closest_branch"
+    info "Detected closest branch in lineage: $base_branch"
+  else
+    base_branch="$main_branch"
+    info "Using $base_branch as base branch"
+  fi
+fi
+
+# Find the merge-base (common ancestor) with the base branch
+merge_base=$(git merge-base "$base_branch" HEAD)
+if [ $? -ne 0 ]; then
+  error "Failed to find merge base with branch '$base_branch'"
+fi
+
+# Count the number of commits to squash
+commit_count=$(git rev-list --count "$merge_base..HEAD")
+
+if [ "$commit_count" -eq 0 ]; then
+  info "No commits to squash. Your branch is already at the same commit as $base_branch."
+  exit 0
+fi
+
+if [ "$commit_count" -eq 1 ]; then
+  info "Only one commit found. No need to squash."
+  exit 0
+fi
+
+# Get the commit messages for the default squash message
+if [ -z "$commit_message" ]; then
+  # Use a more portable alternative to 'tac' (reverse the lines)
+  commit_message=$(git log --format="%s%n%n%b" "$merge_base..HEAD" | sed '/^$/d' | awk '{a[i++]=$0} END {for (j=i-1; j>=0;) print a[j--]}')
+fi
+
+# Show what we're going to do
+info "Found $commit_count commits to squash on branch $current_branch"
+info "Base branch: $base_branch"
+info "Common ancestor: $(git rev-parse --short "$merge_base")"
+
+# List the commits that will be squashed
+echo -e "\n${YELLOW}Commits to be squashed:${NC}"
+git log --oneline "$merge_base..HEAD" | awk '{a[i++]=$0} END {for (j=i-1; j>=0;) print a[j--]}'
+
+if [ "$dry_run" = true ]; then
+  warning "DRY RUN: No changes were made"
+  exit 0
+fi
+
+# Confirm with the user
+echo ""
+read -p "Do you want to squash these $commit_count commits? (y/N) " confirm
+if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+  info "Operation cancelled"
+  exit 0
+fi
+
+# Perform the squash
+git reset --soft "$merge_base"
+git add -A
+
+# Create the squashed commit
+if [ -z "$commit_message" ]; then
+  # If no message was provided or generated, open the editor
+  git commit
+else
+  # Use the provided/generated message
+  git commit -m "$commit_message"
+fi
+
+success "Successfully squashed $commit_count commits!"

@@ -1,0 +1,248 @@
+#!/bin/bash
+
+set -e  # Exit on error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Function to print error messages
+error() {
+  echo -e "${RED}ERROR: $1${NC}" >&2
+  exit 1
+}
+
+# Function to print warning messages
+warn() {
+  echo -e "${YELLOW}WARNING: $1${NC}" >&2
+}
+
+# Function to print info messages
+info() {
+  echo -e "${BLUE}$1${NC}"
+}
+
+# Function to print success messages
+success() {
+  echo -e "${GREEN}$1${NC}"
+}
+
+# Function to print repository path
+repo_path() {
+  echo -e "${CYAN}$1${NC}"
+}
+
+# Function to show usage
+show_usage() {
+  echo "Usage: git find-branch [options] <branch_name> [branch_name2] ..."
+  echo "Find which Git repositories contain the specified branch(es)"
+  echo ""
+  echo "Description:"
+  echo "  git-find-branch searches for Git repositories starting from the current"
+  echo "  directory and checks which ones contain the specified branch name(s)."
+  echo "  This is useful when you have multiple clones of the same repository"
+  echo "  and need to find where specific branches are located."
+  echo ""
+  echo "Options:"
+  echo "  -r            Search only remote branches"
+  echo "  -a            Search both local and remote branches (default: local only)"
+  echo "  -v            Verbose output - show branch details"
+  echo "  -d <depth>    Maximum directory depth to search (default: 3)"
+  echo "  -h            Show this help message"
+  echo ""
+  echo "Examples:"
+  echo "  # Find repositories containing branch 'feature-x'"
+  echo "  git find-branch feature-x"
+  echo ""
+  echo "  # Find repositories containing multiple branches"
+  echo "  git find-branch feature-x bugfix-y"
+  echo ""
+  echo "  # Search remote branches only"
+  echo "  git find-branch -r origin/feature-x"
+  echo ""
+  echo "  # Search both local and remote branches with verbose output"
+  echo "  git find-branch -av feature-x"
+  echo ""
+  echo "  # Search with custom depth"
+  echo "  git find-branch -d 5 feature-x"
+}
+
+# Default options
+search_remote=false
+search_all=false
+verbose=false
+max_depth=3
+
+# Process options
+while getopts "ravd:h" opt; do
+  case $opt in
+    r) search_remote=true ;;
+    a) search_all=true ;;
+    v) verbose=true ;;
+    d) max_depth="$OPTARG" ;;
+    h) show_usage; exit 0 ;;
+    *) show_usage; exit 1 ;;
+  esac
+done
+
+# Shift to remove options from arguments
+shift $((OPTIND-1))
+
+# Check if branch names are provided
+if [ $# -eq 0 ]; then
+  error "No branch names specified"
+fi
+
+# Validate max_depth is a number
+if ! [[ "$max_depth" =~ ^[0-9]+$ ]]; then
+  error "Depth must be a positive integer"
+fi
+
+# Store branch names
+branch_names=("$@")
+
+# Function to check if a directory is a git repository
+is_git_repo() {
+  local dir="$1"
+  [ -d "$dir/.git" ] || (cd "$dir" && git rev-parse --git-dir >/dev/null 2>&1)
+}
+
+# Function to find git repositories
+find_git_repos() {
+  local search_dir="$1"
+  local current_depth="$2"
+  
+  # Don't search deeper than max_depth
+  if [ "$current_depth" -gt "$max_depth" ]; then
+    return
+  fi
+  
+  # Check if current directory is a git repo
+  if is_git_repo "$search_dir"; then
+    echo "$search_dir"
+  fi
+  
+  # Search subdirectories if we haven't reached max depth
+  if [ "$current_depth" -lt "$max_depth" ]; then
+    for subdir in "$search_dir"/*; do
+      if [ -d "$subdir" ] && [ ! -L "$subdir" ]; then
+        find_git_repos "$subdir" $((current_depth + 1))
+      fi
+    done
+  fi
+}
+
+# Function to check if branch exists in repository
+check_branch_in_repo() {
+  local repo_dir="$1"
+  local branch_name="$2"
+  
+  cd "$repo_dir"
+  
+  local found=false
+  local branch_info=""
+  
+  if $search_remote; then
+    # Search only remote branches
+    if git branch -r | grep -q "\\b$branch_name\\b"; then
+      found=true
+      if $verbose; then
+        branch_info=$(git branch -r | grep "\\b$branch_name\\b" | sed 's/^[[:space:]]*//')
+      fi
+    fi
+  elif $search_all; then
+    # Search both local and remote branches
+    if git branch -a | grep -q "\\b$branch_name\\b"; then
+      found=true
+      if $verbose; then
+        branch_info=$(git branch -a | grep "\\b$branch_name\\b" | sed 's/^[[:space:]]*//')
+      fi
+    fi
+  else
+    # Search only local branches (default)
+    if git branch | grep -q "\\b$branch_name\\b"; then
+      found=true
+      if $verbose; then
+        branch_info=$(git branch | grep "\\b$branch_name\\b" | sed 's/^[[:space:]]*//')
+      fi
+    fi
+  fi
+  
+  if $found; then
+    if $verbose && [ -n "$branch_info" ]; then
+      echo "$branch_info"
+    else
+      echo "found"
+    fi
+  else
+    echo "not_found"
+  fi
+}
+
+# Main execution
+info "Searching for Git repositories (max depth: $max_depth)..."
+
+# Find all git repositories
+repos=()
+while IFS= read -r -d '' repo; do
+  repos+=("$repo")
+done < <(find_git_repos "$(pwd)" 0 | sort | tr '\n' '\0')
+
+if [ ${#repos[@]} -eq 0 ]; then
+  warn "No Git repositories found in current directory and subdirectories"
+  exit 1
+fi
+
+info "Found ${#repos[@]} Git repositories. Checking for branches..."
+echo ""
+
+# Check each repository for each branch
+found_any=false
+
+for branch_name in "${branch_names[@]}"; do
+  echo "Branch: $branch_name"
+  echo "$(printf '=%.0s' {1..50})"
+  
+  found_for_this_branch=false
+  
+  for repo in "${repos[@]}"; do
+    # Get relative path for cleaner output
+    current_dir=$(pwd)
+    if [[ "$repo" == "$current_dir"/* ]]; then
+      rel_path="${repo#$current_dir/}"
+    elif [[ "$repo" == "$current_dir" ]]; then
+      rel_path="."
+    else
+      rel_path="$repo"
+    fi
+
+    # Check if branch exists in this repo
+    result=$(check_branch_in_repo "$repo" "$branch_name" 2>/dev/null)
+    
+    if [ "$result" != "not_found" ]; then
+      found_for_this_branch=true
+      found_any=true
+      
+      repo_path "$rel_path"
+      if $verbose && [ "$result" != "found" ]; then
+        echo "  $result"
+      fi
+    fi
+  done
+  
+  if ! $found_for_this_branch; then
+    echo "No repositories found containing branch '$branch_name'"
+  fi
+  
+  echo ""
+done
+
+if $found_any; then
+  success "Search complete!"
+else
+  warn "No repositories found containing any of the specified branches"
+fi

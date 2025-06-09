@@ -1,0 +1,248 @@
+#!/bin/bash
+
+set -e  # Exit on error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Function to print error messages
+error() {
+  echo -e "${RED}ERROR: $1${NC}" >&2
+  exit 1
+}
+
+# Function to print warning messages
+warn() {
+  echo -e "${YELLOW}WARNING: $1${NC}" >&2
+}
+
+# Function to print info messages
+info() {
+  echo -e "${BLUE}$1${NC}"
+}
+
+# Function to print success messages
+success() {
+  echo -e "${GREEN}$1${NC}"
+}
+
+# Function to show usage
+show_usage() {
+  echo "Usage: git invert-stash [options] [stash_ref]"
+  echo "Invert a git stash (swap additions/deletions) and overwrite the original"
+  echo ""
+  echo "Description:"
+  echo "  git-invert-stash takes a git stash and creates an inverted version where"
+  echo "  additions become deletions and deletions become additions. The original"
+  echo "  stash is then replaced with this inverted version."
+  echo ""
+  echo "Arguments:"
+  echo "  stash_ref    Stash reference (e.g., stash@{0}, stash@{1}, etc.)"
+  echo "               Defaults to stash@{0} (most recent stash)"
+  echo ""
+  echo "Options:"
+  echo "  -n    Dry run - show what would happen without making changes"
+  echo "  -y    Skip confirmation prompt"
+  echo "  -h    Show this help message"
+  echo ""
+  echo "Examples:"
+  echo "  # Invert the most recent stash"
+  echo "  git invert-stash"
+  echo ""
+  echo "  # Invert a specific stash"
+  echo "  git invert-stash stash@{1}"
+  echo ""
+  echo "  # Dry run to see what would happen"
+  echo "  git invert-stash -n"
+  echo ""
+  echo "  # Invert without confirmation"
+  echo "  git invert-stash -y stash@{2}"
+}
+
+# Process options
+dry_run=false
+skip_confirm=false
+
+while getopts "nyh" opt; do
+  case $opt in
+    n) dry_run=true ;;
+    y) skip_confirm=true ;;
+    h) show_usage; exit 0 ;;
+    *) show_usage; exit 1 ;;
+  esac
+done
+
+# Shift to remove options from arguments
+shift $((OPTIND-1))
+
+# Get stash reference (default to most recent)
+stash_ref="${1:-stash@{0}}"
+
+# Check if we're in a git repository
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+  error "Not in a git repository"
+fi
+
+# Check if the stash exists
+if ! git rev-parse --verify "$stash_ref" >/dev/null 2>&1; then
+  error "Stash '$stash_ref' does not exist"
+fi
+
+# Get stash information
+stash_message=$(git stash list --format="%gd: %gs" | grep "^$stash_ref:" | cut -d' ' -f2-)
+if [ -z "$stash_message" ]; then
+  stash_message="WIP on $(git branch --show-current)"
+fi
+
+info "Target stash: $stash_ref"
+info "Stash message: $stash_message"
+
+# Get the stash diff
+info "Getting stash diff..."
+stash_diff=$(git stash show -p "$stash_ref" 2>/dev/null)
+if [ -z "$stash_diff" ]; then
+  error "No diff found for stash '$stash_ref' or stash is empty"
+fi
+
+# Create inverted diff
+info "Creating inverted diff..."
+inverted_diff=$(echo "$stash_diff" | sed '
+  /^---/b
+  /^+++/b
+  /^@@/b
+  /^index/b
+  /^diff/b
+  s/^+/-/
+  t end
+  s/^-/+/
+  :end
+')
+
+if [ -z "$inverted_diff" ]; then
+  error "Failed to create inverted diff"
+fi
+
+# Show what will happen
+echo ""
+info "Original stash diff (first 20 lines):"
+echo "$stash_diff" | head -20
+if [ $(echo "$stash_diff" | wc -l) -gt 20 ]; then
+  echo "... ($(echo "$stash_diff" | wc -l) total lines)"
+fi
+
+echo ""
+info "Inverted diff (first 20 lines):"
+echo "$inverted_diff" | head -20
+if [ $(echo "$inverted_diff" | wc -l) -gt 20 ]; then
+  echo "... ($(echo "$inverted_diff" | wc -l) total lines)"
+fi
+
+# Confirmation prompt unless -y flag was used
+if ! $skip_confirm && ! $dry_run; then
+  echo ""
+  read -p "Replace '$stash_ref' with inverted version? [y/N] " confirm
+  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    info "Operation cancelled."
+    exit 0
+  fi
+fi
+
+# If dry run, exit here
+if $dry_run; then
+  info "Dry run complete. No changes were made."
+  exit 0
+fi
+
+# Create temporary directory for patch file
+tmp_dir=$(mktemp -d)
+if [ $? -ne 0 ]; then
+  error "Failed to create temporary directory"
+fi
+
+# Cleanup function
+cleanup() {
+  rm -rf "$tmp_dir"
+}
+
+# Set trap for cleanup
+trap cleanup EXIT
+
+# Save inverted diff to temporary file
+patch_file="$tmp_dir/inverted.patch"
+echo "$inverted_diff" > "$patch_file"
+
+# Get current working directory state
+original_dir=$(pwd)
+git_root=$(git rev-parse --show-toplevel)
+cd "$git_root"
+
+# Save current state
+info "Saving current working directory state..."
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  has_changes=true
+  temp_stash=$(git stash create "git-invert-stash temporary stash")
+  if [ -n "$temp_stash" ]; then
+    git stash store -m "git-invert-stash temp" "$temp_stash"
+  fi
+else
+  has_changes=false
+fi
+
+# Create inverted stash using the correct approach
+info "Creating inverted stash..."
+
+# Apply the original stash to get to the "after" state
+if ! git stash apply "$stash_ref" 2>/dev/null; then
+  error "Failed to apply original stash. There may be conflicts."
+fi
+
+# Commit this "after" state as the new base
+git add -A
+if ! git commit -m "Temporary commit for stash inversion"; then
+  error "Failed to commit temporary state."
+fi
+
+# Now apply the original stash in reverse to create the inverse changes
+original_patch_file="$tmp_dir/original.patch"
+echo "$stash_diff" > "$original_patch_file"
+
+if ! git apply --reverse "$original_patch_file"; then
+  error "Failed to create inverse changes."
+fi
+
+# Create new stash with inverted changes
+info "Creating new stash with inverted changes..."
+new_stash=$(git stash create "INVERTED: $stash_message")
+if [ -z "$new_stash" ]; then
+  error "Failed to create new stash."
+fi
+
+# Reset back to the original commit (before the temporary commit)
+git reset --hard HEAD~1
+
+# Get the stash index number
+stash_index=$(echo "$stash_ref" | sed 's/stash@{\([0-9]*\)}/\1/')
+
+# Drop the original stash
+info "Removing original stash..."
+git stash drop "$stash_ref"
+
+# Store the new inverted stash at the same position
+info "Storing inverted stash..."
+git stash store -m "INVERTED: $stash_message" "$new_stash"
+
+# Restore original working directory state if needed
+if [ "$has_changes" = true ] && [ -n "$temp_stash" ]; then
+  info "Restoring original working directory state..."
+  git stash apply stash@{0} 2>/dev/null || warn "Failed to restore original working state"
+  git stash drop stash@{0} 2>/dev/null || true
+fi
+
+cd "$original_dir"
+
+success "Successfully inverted stash '$stash_ref'"
+info "The inverted stash is now at stash@{0}"

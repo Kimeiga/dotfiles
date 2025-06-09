@@ -1,16 +1,55 @@
 #!/bin/bash
 
-# git-apply-pr: Applies a GitHub PR as a single commit and optionally rebases a branch on top
-# Usage: git-apply-pr PR_NUMBER [YOUR_BRANCH] [--keep-temp]
+# git-squash-branch: Applies a GitHub PR as a single commit and optionally rebases a branch on top
+# Usage: git squash-branch [options] PR_NUMBER [YOUR_BRANCH]
 # Requirements: GitHub CLI (gh) must be installed and authenticated
 
 set -e  # Exit on any error
+
+# Function to show usage
+show_usage() {
+  echo "Usage: git squash-branch [options] PR_NUMBER [YOUR_BRANCH]"
+  echo "Apply a GitHub PR as a single commit and optionally rebase a branch on top"
+  echo ""
+  echo "Options:"
+  echo "  -h, --help    Show this help message"
+  echo "  --keep-temp   Keep temporary branch after rebasing"
+  echo ""
+  echo "Arguments:"
+  echo "  PR_NUMBER     The GitHub PR number to apply"
+  echo "  YOUR_BRANCH   Optional branch to rebase on top of the PR changes"
+  echo "                If not provided, uses current branch"
+  echo ""
+  echo "Description:"
+  echo "  This command applies changes from a GitHub PR as a single clean commit,"
+  echo "  optionally rebasing your branch on top of these changes. This is useful"
+  echo "  for incorporating PR changes while maintaining a clean commit history."
+  echo ""
+  echo "Examples:"
+  echo "  # Apply PR #123 as a single commit"
+  echo "  git squash-branch 123"
+  echo ""
+  echo "  # Apply PR #123 and rebase your-branch on top"
+  echo "  git squash-branch 123 your-branch"
+  echo ""
+  echo "  # Apply PR #123 and keep temporary branch"
+  echo "  git squash-branch 123 --keep-temp"
+  echo ""
+  echo "Requirements:"
+  echo "  GitHub CLI (gh) must be installed and authenticated"
+}
+
+# Process options
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+  show_usage
+  exit 0
+fi
 
 # Parse arguments
 PR_NUMBER=$1
 if [ -z "$PR_NUMBER" ]; then
   echo "Error: PR number is required"
-  echo "Usage: git-apply-pr PR_NUMBER [YOUR_BRANCH] [--keep-temp]"
+  show_usage
   exit 1
 fi
 
@@ -86,9 +125,9 @@ if [ "$REBASE_NEEDED" = true ]; then
   echo "Rebasing $YOUR_BRANCH onto the patched branch"
   git checkout $YOUR_BRANCH
   git rebase $PATCH_BRANCH
-  
+
   echo "Success! Your branch $YOUR_BRANCH now includes the changes from PR #$PR_NUMBER"
-  
+
   # Clean up the patch branch if not keeping temp branches
   if [ "$KEEP_TEMP" = false ]; then
     echo "Cleaning up patch branch"

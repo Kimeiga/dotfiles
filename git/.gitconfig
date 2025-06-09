@@ -78,7 +78,7 @@
   ac = "!f() { git add -A && git commit --amend --no-edit; }; f"
   cm = "!f() { git add -A && git commit -m \"$1\"; }; f"
   h = hide
-  m = '!sh git-move-file.sh'
+  m = '!sh git-move-file'
   n = next
   v = prev
   bu = "!f() { git branch --set-upstream-to=origin/$(git branch --show-current) && git pull; }; f"
@@ -88,7 +88,25 @@
   pr = "!f() { gh pr view --web; }; f"
   k = keep
   squash-branch = git-squash-branch
-  bc =  "!f() { git diff $(git merge-base $(git show-ref --verify --quiet refs/heads/main && echo main || echo master) HEAD) HEAD; }; f"
+  squash-all = git-squash-all
+  # bc = branch-changes
+  # bc = "!f() { pattern=\"$1\"; git diff $(git merge-base $(git show-ref --verify --quiet refs/heads/main && echo main || echo master) HEAD) HEAD -- $(test -n \"$pattern\" && echo \":!$pattern\" || echo \".\" ); }; f"
+  # bc = "!f() { \
+  #   base=$(git merge-base $(git show-ref --verify --quiet refs/heads/main && echo main || echo master) HEAD); \
+  #   exclusions=\"\"; \
+  #   for pattern in \"$@\"; do \
+  #     exclusions=\"$exclusions ':!$pattern'\"; \
+  #   done; \
+  #   git diff $base HEAD -- ${exclusions:-.}; \
+  # }; f"
+  bc = "!f() { \
+    base=$(git merge-base $(git show-ref --verify --quiet refs/heads/main && echo main || echo master) HEAD); \
+    if [ -n \"$1\" ]; then \
+      git diff $base HEAD -- \":(exclude)$1\" ${2:+\":(exclude)$2\"} ${3:+\":(exclude)$3\"} ${4:+\":(exclude)$4\"}; \
+    else \
+      git diff $base HEAD; \
+    fi; \
+  }; f"
 
 [format]
   pretty = format:%C(yellow)%h %Cblue%>(12)%ad %Cgreen%<(7)%aN%Cred%d %Creset%s
