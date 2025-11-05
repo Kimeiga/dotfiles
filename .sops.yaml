@@ -1,0 +1,14 @@
+# SOPS configuration for dotfiles secrets management
+# This file tells SOPS which files to encrypt and how
+
+creation_rules:
+  # Encrypt all files in secrets/ directory
+  - path_regex: secrets/.*\.env$
+    age: >-
+      age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  
+  # You can add more rules for different file patterns
+  # - path_regex: secrets/.*\.yaml$
+  #   age: >-
+  #     age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+

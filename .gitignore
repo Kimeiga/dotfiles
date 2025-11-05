@@ -3,3 +3,19 @@ result*
 # packer.nvim generated plugin loader code
 packer_compiled.lua
 .DS_Store
+
+# Secrets - IMPORTANT: Only commit encrypted files!
+# Unencrypted .env files should NEVER be committed
+*.env
+!secrets/*.env  # Allow encrypted .env files in secrets/ directory
+secrets/zshrc-snippet.txt  # This is just a template, not needed in repo
+
+# SOPS age private keys (NEVER commit these!)
+keys.txt
+*.key
+.age-key*
+
+# Backup files
+*.bak
+*.backup
+*~
