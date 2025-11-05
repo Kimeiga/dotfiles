@@ -105,13 +105,13 @@ zinit ice wait lucid as"program" pick"kubectl" blockf
 zinit snippet OMZP::kubectl
 
 # Google Cloud SDK (lazy loaded to avoid console output during instant prompt)
-if [ -f '/Users/hakan.alpay/google-cloud-sdk/path.zsh.inc' ]; then
+if [ -f "$HOME/Downloads/google-cloud-sdk/path.zsh.inc" ]; then
   zinit ice wait lucid
-  zinit snippet '/Users/hakan.alpay/google-cloud-sdk/path.zsh.inc'
+  zinit snippet "$HOME/Downloads/google-cloud-sdk/path.zsh.inc"
 fi
-if [ -f '/Users/hakan.alpay/google-cloud-sdk/completion.zsh.inc' ]; then
+if [ -f "$HOME/Downloads/google-cloud-sdk/completion.zsh.inc" ]; then
   zinit ice wait lucid
-  zinit snippet '/Users/hakan.alpay/google-cloud-sdk/completion.zsh.inc'
+  zinit snippet "$HOME/Downloads/google-cloud-sdk/completion.zsh.inc"
 fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -126,7 +126,8 @@ export GPG_TTY=$(tty)
 export BAT_THEME=base16
 export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/ssh-agent.socket"
 export LEDGER_FILE=$HOME/Documents/finance/ledger/journals/current.journal
-export PNPM_HOME="/Users/hakan.alpay/Library/pnpm"
+export PNPM_HOME="$HOME/Library/pnpm"
+export PATH="$PNPM_HOME:$PATH"
 export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 
