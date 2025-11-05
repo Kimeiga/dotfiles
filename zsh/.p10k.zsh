@@ -80,7 +80,9 @@ typeset -g POWERLEVEL9K_JAVA_VERSION_PROJECT_ONLY=true
 # Kubernetes context (IMPORTANT: shows which cluster you're operating on)
 typeset -g POWERLEVEL9K_KUBECONTEXT_FOREGROUND=blue
 typeset -g POWERLEVEL9K_KUBECONTEXT_BACKGROUND=none
-typeset -g POWERLEVEL9K_KUBECONTEXT_SHOW_ON_COMMAND='kubectl|helm|kubens|kubectx|oc|istioctl|k9s|helmfile|flux|stern'
+# Always show kubecontext (safer for production work - you always know which cluster you're on)
+# If you want it to only show when using kubectl, uncomment the next line:
+# typeset -g POWERLEVEL9K_KUBECONTEXT_SHOW_ON_COMMAND='kubectl|helm|kubens|kubectx|oc|istioctl|k9s|helmfile|flux|stern'
 typeset -g POWERLEVEL9K_KUBECONTEXT_SHOW_DEFAULT_NAMESPACE=true
 typeset -g POWERLEVEL9K_KUBECONTEXT_PREFIX='☸ '
 
