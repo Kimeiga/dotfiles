@@ -19,3 +19,7 @@ keys.txt
 *.bak
 *.backup
 *~
+
+# Secret scanning reports
+reports/
+.git-filter-repo/
