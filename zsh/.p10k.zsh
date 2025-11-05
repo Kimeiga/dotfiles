@@ -8,6 +8,7 @@ typeset -g POWERLEVEL9K_INSTANT_PROMPT=verbose
 typeset -g POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(
   dir                   # current directory
   vcs                   # git status
+  kubecontext           # kubernetes context (IMPORTANT for safety!)
   newline               # line break
   prompt_char           # prompt character
 )
@@ -75,6 +76,13 @@ typeset -g POWERLEVEL9K_PYTHON_VERSION_PROJECT_ONLY=true
 typeset -g POWERLEVEL9K_JAVA_VERSION_FOREGROUND=red
 typeset -g POWERLEVEL9K_JAVA_VERSION_PREFIX='via ☕ '
 typeset -g POWERLEVEL9K_JAVA_VERSION_PROJECT_ONLY=true
+
+# Kubernetes context (IMPORTANT: shows which cluster you're operating on)
+typeset -g POWERLEVEL9K_KUBECONTEXT_FOREGROUND=blue
+typeset -g POWERLEVEL9K_KUBECONTEXT_BACKGROUND=none
+typeset -g POWERLEVEL9K_KUBECONTEXT_SHOW_ON_COMMAND='kubectl|helm|kubens|kubectx|oc|istioctl|k9s|helmfile|flux|stern'
+typeset -g POWERLEVEL9K_KUBECONTEXT_SHOW_DEFAULT_NAMESPACE=true
+typeset -g POWERLEVEL9K_KUBECONTEXT_PREFIX='☸ '
 
 # Transient prompt (clean up old prompts)
 typeset -g POWERLEVEL9K_TRANSIENT_PROMPT=always
