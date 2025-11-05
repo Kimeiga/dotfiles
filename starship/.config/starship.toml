@@ -1,0 +1,109 @@
+# Starship configuration - Pure-like theme
+# Fast, minimal, and informative
+
+# Timeout for commands (in milliseconds)
+command_timeout = 500
+
+# Format: customize the prompt layout
+format = """
+$directory\
+$git_branch\
+$git_status\
+$nodejs\
+$python\
+$java\
+$rust\
+$golang\
+$cmd_duration\
+$line_break\
+$character"""
+
+# Prompt character (like Pure's »)
+[character]
+success_symbol = "[»](bold green)"
+error_symbol = "[»](bold red)"
+
+# Directory
+[directory]
+style = "bold cyan"
+truncation_length = 3
+truncate_to_repo = true
+format = "[$path]($style) "
+
+# Git branch
+[git_branch]
+symbol = "on "
+style = "bold purple"
+format = "[$symbol$branch]($style) "
+
+# Git status
+[git_status]
+style = "bold yellow"
+format = "([$all_status$ahead_behind]($style) )"
+conflicted = "="
+ahead = "⇡${count}"
+behind = "⇣${count}"
+diverged = "⇕⇡${ahead_count}⇣${behind_count}"
+untracked = "?"
+stashed = "$"
+modified = "!"
+staged = "+"
+renamed = "»"
+deleted = "✘"
+
+# Command duration (show if > 2 seconds)
+[cmd_duration]
+min_time = 2_000
+format = "took [$duration]($style) "
+style = "bold yellow"
+
+# Language versions (only show when relevant)
+[nodejs]
+symbol = "⬢ "
+style = "bold green"
+format = "via [$symbol$version]($style) "
+detect_extensions = ["js", "mjs", "cjs", "ts", "tsx", "jsx"]
+detect_files = ["package.json", ".node-version", ".nvmrc"]
+detect_folders = ["node_modules"]
+
+[python]
+symbol = "🐍 "
+style = "bold yellow"
+format = "via [$symbol$version]($style) "
+detect_extensions = ["py"]
+detect_files = [".python-version", "Pipfile", "pyproject.toml", "requirements.txt", "setup.py", "tox.ini"]
+detect_folders = []
+
+[java]
+symbol = "☕ "
+style = "bold red"
+format = "via [$symbol$version]($style) "
+detect_extensions = ["java", "class", "jar", "gradle", "clj", "cljc"]
+detect_files = ["pom.xml", "build.gradle.kts", "build.sbt", ".java-version", "deps.edn", "project.clj", "build.boot"]
+
+[rust]
+symbol = "🦀 "
+style = "bold red"
+format = "via [$symbol$version]($style) "
+
+[golang]
+symbol = "🐹 "
+style = "bold cyan"
+format = "via [$symbol$version]($style) "
+
+# Disable modules we don't need for speed
+[aws]
+disabled = true
+
+[gcloud]
+disabled = true
+
+[kubernetes]
+disabled = true
+
+[docker_context]
+disabled = true
+
+[package]
+disabled = true
+

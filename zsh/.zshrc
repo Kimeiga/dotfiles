@@ -53,22 +53,16 @@ zinit wait lucid for \
     blockf atpull'zinit creinstall -q .' \
         zsh-users/zsh-completions
 
-# Pure theme
-zinit ice compile'(pure|async).zsh' pick'async.zsh' src'pure.zsh'
-zinit light sindresorhus/pure
-PURE_PROMPT_SYMBOL=»
+# Starship prompt (faster than Pure, written in Rust)
+eval "$(starship init zsh)"
 
 # Git plugin - load from local file
 zinit snippet ~/git.plugin.zsh
 
-# NVM setup - optimized for speed
-export NVM_DIR="$HOME/.nvm"
-# Simple configuration for NVM
-export NVM_COMPLETION=true
-export NVM_SYMLINK_CURRENT="true"
-
-# Load NVM with minimal configuration
-zinit wait lucid light-mode for lukechilds/zsh-nvm
+# asdf - unified version manager (replaces nvm, pyenv, jenv)
+# Lazy load for performance (hardcode path to avoid slow brew --prefix call)
+zinit ice wait lucid
+zinit snippet /opt/homebrew/opt/asdf/libexec/asdf.sh
 
 # pnpm
 export PNPM_HOME="/Users/hakan.alpay/Library/pnpm"
@@ -83,25 +77,7 @@ export PATH="$BUN_INSTALL/bin:$PATH"
 zinit ice wait lucid
 zinit snippet "/Users/hakan.alpay/.bun/_bun"
 
-# pyenv setup (proper initialization)
-if command -v pyenv &> /dev/null; then
-  export PYENV_ROOT="$HOME/.pyenv"
-  export PATH="$PYENV_ROOT/bin:$PATH"
-  zinit ice wait lucid atinit'eval "$(pyenv init --path)"; eval "$(pyenv init -)"'
-  zinit snippet OMZP::pyenv
-fi
-
-# jenv setup - lazy load for performance
-if command -v jenv &> /dev/null && [[ ! -n $JENV_LOADED ]]; then
-  export PATH="$HOME/.jenv/bin:$PATH"
-  export JENV_LOADED=1
-  # Lazy load jenv
-  jenv() {
-    unfunction jenv
-    eval "$(command jenv init -)"
-    command jenv "$@"
-  }
-fi
+# pyenv, jenv, nvm are now replaced by asdf (configured above)
 
 # ZSH Completions configuration
 # Load after plugins that might add completion functions
@@ -157,9 +133,9 @@ fi
 # Additional contexts should be in ~/.kube/contexts
 # Optimized: Only run if directory exists and has files
 CUSTOM_KUBE_CONTEXTS="$HOME/.kube/contexts"
-if [ -d "$CUSTOM_KUBE_CONTEXTS" ] && [ -n "$(ls -A "$CUSTOM_KUBE_CONTEXTS"/*.yaml 2>/dev/null)" ]; then
-  for context_file in "$CUSTOM_KUBE_CONTEXTS"/*.yaml; do
-    [ -f "$context_file" ] && export KUBECONFIG="$context_file:$KUBECONFIG"
+if [ -d "$CUSTOM_KUBE_CONTEXTS" ]; then
+  for context_file in "$CUSTOM_KUBE_CONTEXTS"/*.yaml(N); do
+    export KUBECONFIG="$context_file:$KUBECONFIG"
   done
 fi
 
