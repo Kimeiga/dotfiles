@@ -11,6 +11,7 @@ typeset -g POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(
   kubecontext           # kubernetes context (IMPORTANT for safety!)
   newline               # line break
   prompt_char           # prompt character
+  status                # exit code (only shown on error)
 )
 
 typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(
@@ -27,6 +28,7 @@ typeset -g POWERLEVEL9K_PROMPT_CHAR_{OK,ERROR}_VIINS_CONTENT_EXPANSION='»'
 typeset -g POWERLEVEL9K_PROMPT_CHAR_{OK,ERROR}_VICMD_CONTENT_EXPANSION='»'
 typeset -g POWERLEVEL9K_PROMPT_CHAR_{OK,ERROR}_VIVIS_CONTENT_EXPANSION='»'
 typeset -g POWERLEVEL9K_PROMPT_CHAR_{OK,ERROR}_VIOWR_CONTENT_EXPANSION='»'
+typeset -g POWERLEVEL9K_PROMPT_CHAR_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL=''  # No space after »
 
 # Directory - Show full path
 typeset -g POWERLEVEL9K_DIR_FOREGROUND=cyan
@@ -88,9 +90,16 @@ typeset -g POWERLEVEL9K_KUBECONTEXT_PREFIX='☸ '
 # Transient prompt (clean up old prompts)
 typeset -g POWERLEVEL9K_TRANSIENT_PROMPT=always
 
-# Disable segments we don't need for speed
-typeset -g POWERLEVEL9K_STATUS_OK=false
-typeset -g POWERLEVEL9K_STATUS_ERROR=false
+# Status segment (show exit code on error)
+typeset -g POWERLEVEL9K_STATUS_OK=false                    # Don't show on success
+typeset -g POWERLEVEL9K_STATUS_ERROR=true                  # Show on error
+typeset -g POWERLEVEL9K_STATUS_ERROR_FOREGROUND=red
+typeset -g POWERLEVEL9K_STATUS_ERROR_BACKGROUND=none
+typeset -g POWERLEVEL9K_STATUS_ERROR_VISUAL_IDENTIFIER_EXPANSION='✘'
+typeset -g POWERLEVEL9K_STATUS_ERROR_SIGNAL=true           # Show signal name (e.g., SIGTERM)
+typeset -g POWERLEVEL9K_STATUS_ERROR_PIPE=true             # Show exit code of failed pipe command
+
+# Disable verbose background jobs
 typeset -g POWERLEVEL9K_BACKGROUND_JOBS_VERBOSE=false
 
 # Performance optimizations
