@@ -56,9 +56,9 @@ zinit light romkatv/powerlevel10k
 # asdf (load immediately, not lazy)
 source /opt/homebrew/opt/asdf/libexec/asdf.sh
 
-# Git plugin (lazy loaded)
-# zinit ice wait lucid
-# zinit snippet ~/git.plugin.zsh
+# Git plugin (Oh-My-Zsh git plugin for aliases and completions)
+zinit ice wait lucid
+zinit snippet OMZP::git
 
 # Syntax highlighting, autosuggestions
 zinit wait lucid for \
