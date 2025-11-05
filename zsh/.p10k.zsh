@@ -84,13 +84,6 @@ typeset -g POWERLEVEL9K_KUBECONTEXT_BACKGROUND=none
 typeset -g POWERLEVEL9K_KUBECONTEXT_SHOW_ON_COMMAND='kubectl|helm|kubens|kubectx|oc|istioctl|k9s|helmfile|flux|stern'
 typeset -g POWERLEVEL9K_KUBECONTEXT_SHOW_DEFAULT_NAMESPACE=true
 typeset -g POWERLEVEL9K_KUBECONTEXT_PREFIX='☸ '
-# Shorten long DoorDash cluster names
-typeset -g POWERLEVEL9K_KUBECONTEXT_CONTENT_EXPANSION='${P9K_KUBECONTEXT_CLOUD_CLUSTER:-${P9K_KUBECONTEXT_NAME}}${${:-/$P9K_KUBECONTEXT_NAMESPACE}:#/default}'
-# Show just the last part of long cluster names (e.g., "sandbox-01" instead of full teleport URL)
-typeset -g POWERLEVEL9K_KUBECONTEXT_SHORTEN=(
-  'teleport.*-dash-compute-*-(*)-0*' '$1'  # teleport...sandbox-01 → sandbox
-  '(.*)' '$1'  # Default: show full name
-)
 
 # Transient prompt (clean up old prompts)
 typeset -g POWERLEVEL9K_TRANSIENT_PROMPT=always
@@ -112,6 +105,12 @@ typeset -g POWERLEVEL9K_LEFT_SEGMENT_SEPARATOR=''
 typeset -g POWERLEVEL9K_RIGHT_SEGMENT_SEPARATOR=''
 typeset -g POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR=' '
 typeset -g POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR=' '
+
+# Remove leading/trailing spaces
+typeset -g POWERLEVEL9K_LEFT_PROMPT_FIRST_SEGMENT_START_SYMBOL=''  # No space before first segment
+typeset -g POWERLEVEL9K_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL=''     # No space after last segment
+typeset -g POWERLEVEL9K_RIGHT_PROMPT_FIRST_SEGMENT_START_SYMBOL='' # No space before right prompt
+typeset -g POWERLEVEL9K_RIGHT_PROMPT_LAST_SEGMENT_END_SYMBOL=' '   # One space after right prompt
 
 # No icons/powerline symbols (clean look)
 typeset -g POWERLEVEL9K_MODE=ascii
