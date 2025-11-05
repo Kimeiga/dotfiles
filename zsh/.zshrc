@@ -53,13 +53,12 @@ zinit light romkatv/powerlevel10k
 # P10k config
 [[ -f ~/dotfiles/zsh/.p10k.zsh ]] && source ~/dotfiles/zsh/.p10k.zsh
 
-# asdf
-zinit ice wait lucid
-zinit snippet /opt/homebrew/opt/asdf/libexec/asdf.sh
+# asdf (load immediately, not lazy)
+source /opt/homebrew/opt/asdf/libexec/asdf.sh
 
 # Git plugin (lazy loaded)
-zinit ice wait lucid
-zinit snippet ~/git.plugin.zsh
+# zinit ice wait lucid
+# zinit snippet ~/git.plugin.zsh
 
 # Syntax highlighting, autosuggestions
 zinit wait lucid for \
