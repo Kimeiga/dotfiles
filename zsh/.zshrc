@@ -50,6 +50,12 @@ SAVEHIST=10000
 zinit ice depth=1
 zinit light romkatv/powerlevel10k
 
+# Disable automatic spaces around left/right prompts
+typeset -g POWERLEVEL9K_LEFT_PROMPT_FIRST_SEGMENT_START_SYMBOL=''
+typeset -g POWERLEVEL9K_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL=''
+typeset -g POWERLEVEL9K_RIGHT_PROMPT_FIRST_SEGMENT_START_SYMBOL=''
+typeset -g POWERLEVEL9K_RIGHT_PROMPT_LAST_SEGMENT_END_SYMBOL=''
+
 # P10k config
 [[ -f ~/dotfiles/zsh/.p10k.zsh ]] && source ~/dotfiles/zsh/.p10k.zsh
 
@@ -224,6 +230,48 @@ alias ve="$EDITOR $HOME/dotfiles/nvim/.config/nvim/init.lua"
 alias bigyarn='NODE_OPTIONS=--max-old-space-size=8192 yarn'
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Useful Shortcuts
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Git root - jump to repository root
+alias grt='cd "$(git rev-parse --show-toplevel || echo .)"'
+
+# Quick parent directory navigation
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+
+# Better ls with eza (if installed)
+if command -v eza &> /dev/null; then
+  alias ls='eza --icons --group-directories-first'
+  alias l='eza -lah --icons --group-directories-first'
+  alias ll='eza -la --icons --group-directories-first'
+  alias lt='eza --tree --level=2 --icons'
+fi
+
+# Better cat with bat (if installed)
+if command -v bat &> /dev/null; then
+  alias cat='bat --style=plain'
+  alias catt='bat'
+fi
+
+# Clipboard helpers (macOS)
+alias c='pbcopy'
+alias p='pbpaste'
+alias cpwd='pwd | pbcopy'
+
+# Docker cleanup
+alias dclean='docker system prune -af --volumes'
+alias dps='docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"'
+
+# Reload shell config
+alias reload='source ~/.zshrc && echo "✅ Reloaded ~/.zshrc"'
+
+# Git spell shortcuts
+alias gk='git keep'
+alias gfc='git files-changed'
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Functions
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -296,4 +344,54 @@ a() {
             av stack "$@"
             ;;
     esac
+}
+
+# Navigate up N directories
+up() {
+  local d=""
+  local limit="$1"
+  # Default to 1 if no argument
+  if [ -z "$limit" ] || [ "$limit" -le 0 ]; then
+    limit=1
+  fi
+  for ((i=1;i<=limit;i++)); do
+    d="../$d"
+  done
+  cd "$d" || return
+}
+
+# Find file by name (uses fd if available, otherwise find)
+f() {
+  if command -v fd &> /dev/null; then
+    fd "$@"
+  else
+    find . -iname "*$@*" 2>/dev/null
+  fi
+}
+
+# Find and edit file with fzf
+fe() {
+  local file
+  file=$(fzf --preview 'bat --color=always --style=numbers --line-range=:500 {}' 2>/dev/null)
+  [ -n "$file" ] && $EDITOR "$file"
+}
+
+# Search history and execute
+h() {
+  eval $(history | fzf --tac --no-sort | sed 's/^ *[0-9]* *//')
+}
+
+# Kill process by name with fzf
+fkill() {
+  local pid
+  pid=$(ps -ef | sed 1d | fzf -m | awk '{print $2}')
+  if [ -n "$pid" ]; then
+    echo "$pid" | xargs kill -${1:-9}
+  fi
+}
+
+# Copy file contents to clipboard
+ccat() {
+  cat "$1" | pbcopy
+  echo "Copied $1 to clipboard"
 }
