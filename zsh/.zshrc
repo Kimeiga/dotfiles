@@ -140,13 +140,46 @@ export FZF_DEFAULT_OPTS='--height 50% --layout=reverse --preview-window right:70
 bindkey -e
 bindkey "\e[3~" delete-char
 
-# Artifactory (DoorDash)
-export ARTIFACTORY_USERNAME=hakan.alpay@doordash.com
-export ARTIFACTORY_PASSWORD=***REMOVED***
-export artifactoryUser=${ARTIFACTORY_USERNAME}
-export artifactoryPassword=${ARTIFACTORY_PASSWORD}
-export ARTIFACTORY_URL=https://${ARTIFACTORY_USERNAME/@/%40}:${ARTIFACTORY_PASSWORD}@ddartifacts.jfrog.io/ddartifacts/api/pypi/pypi-local/simple/
-export PIP_EXTRA_INDEX_URL=${ARTIFACTORY_URL}
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Secrets (loaded from encrypted SOPS files)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Load DoorDash/Artifactory secrets
+if command -v sops &> /dev/null && [ -f ~/dotfiles/secrets/doordash.env ]; then
+  while IFS='=' read -r key value; do
+    # Skip comments and empty lines
+    [[ "$key" =~ ^#.*$ ]] && continue
+    [[ -z "$key" ]] && continue
+    # Export the variable
+    export "$key=$value"
+  done < <(sops --decrypt ~/dotfiles/secrets/doordash.env 2>/dev/null || true)
+
+  # Derived variables (computed from secrets)
+  if [ -n "$ARTIFACTORY_USERNAME" ] && [ -n "$ARTIFACTORY_PASSWORD" ]; then
+    export artifactoryUser=${ARTIFACTORY_USERNAME}
+    export artifactoryPassword=${ARTIFACTORY_PASSWORD}
+    export ARTIFACTORY_URL=https://${ARTIFACTORY_USERNAME/@/%40}:${ARTIFACTORY_PASSWORD}@ddartifacts.jfrog.io/ddartifacts/api/pypi/pypi-local/simple/
+    export PIP_EXTRA_INDEX_URL=${ARTIFACTORY_URL}
+  fi
+fi
+
+# Load Refact.ai secrets (if exists)
+if command -v sops &> /dev/null && [ -f ~/dotfiles/secrets/refactai.env ]; then
+  while IFS='=' read -r key value; do
+    [[ "$key" =~ ^#.*$ ]] && continue
+    [[ -z "$key" ]] && continue
+    export "$key=$value"
+  done < <(sops --decrypt ~/dotfiles/secrets/refactai.env 2>/dev/null || true)
+fi
+
+# Load OpenWeatherMap secrets (if exists)
+if command -v sops &> /dev/null && [ -f ~/dotfiles/secrets/openweathermap.env ]; then
+  while IFS='=' read -r key value; do
+    [[ "$key" =~ ^#.*$ ]] && continue
+    [[ -z "$key" ]] && continue
+    export "$key=$value"
+  done < <(sops --decrypt ~/dotfiles/secrets/openweathermap.env 2>/dev/null || true)
+fi
 
 # Kubernetes contexts
 DEFAULT_KUBE_CONTEXTS="$HOME/.kube/config"
