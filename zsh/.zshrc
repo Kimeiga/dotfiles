@@ -1,8 +1,66 @@
+# Helper function for sourcing files if they exist
+include() {
+  test -f "$@" && source "$@"
+}
+
+# Helper function for sourcing files if they exist
+include() {
+  test -f "$@" && source "$@"
+}
+
 # Zinit setup
 ZINIT_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/zinit/zinit.git"
 [ ! -d $ZINIT_HOME ] && mkdir -p "$(dirname $ZINIT_HOME)"
 [ ! -d $ZINIT_HOME/.git ] && git clone https://github.com/zdharma-continuum/zinit.git "$ZINIT_HOME"
 source "${ZINIT_HOME}/zinit.zsh"
+autoload -Uz _zinit
+(( ${+_comps} )) && _comps[zinit]=_zinit
+
+# Load Zinit annexes
+zinit light-mode for \
+    zdharma-continuum/zinit-annex-as-monitor \
+    zdharma-continuum/zinit-annex-bin-gem-node \
+    zdharma-continuum/zinit-annex-patch-dl \
+    zdharma-continuum/zinit-annex-rust
+
+# ZSH History settings
+setopt extended_history
+setopt inc_append_history
+setopt share_history
+setopt hist_ignore_dups
+setopt hist_ignore_all_dups
+setopt hist_expire_dups_first
+setopt hist_save_no_dups
+setopt hist_ignore_space
+setopt hist_verify
+setopt interactivecomments
+HISTSIZE=10000
+HISTFILE=~/.zsh_history
+SAVEHIST=10000
+autoload -Uz _zinit
+(( ${+_comps} )) && _comps[zinit]=_zinit
+
+# Load Zinit annexes
+zinit light-mode for \
+    zdharma-continuum/zinit-annex-as-monitor \
+    zdharma-continuum/zinit-annex-bin-gem-node \
+    zdharma-continuum/zinit-annex-patch-dl \
+    zdharma-continuum/zinit-annex-rust
+
+# ZSH History settings
+setopt extended_history
+setopt inc_append_history
+setopt share_history
+setopt hist_ignore_dups
+setopt hist_ignore_all_dups
+setopt hist_expire_dups_first
+setopt hist_save_no_dups
+setopt hist_ignore_space
+setopt hist_verify
+setopt interactivecomments
+HISTSIZE=10000
+HISTFILE=~/.zsh_history
+SAVEHIST=10000
 
 # Enable Powerlevel10k instant prompt
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
@@ -20,6 +78,9 @@ zinit light romkatv/powerlevel10k
 zinit ice wait lucid
 zinit snippet /opt/homebrew/opt/asdf/libexec/asdf.sh
 
+# Git plugin
+zinit snippet ~/git.plugin.zsh
+
 # Syntax highlighting, autosuggestions
 zinit wait lucid for \
     atinit"zicompinit; zicdreplay" \
@@ -28,6 +89,48 @@ zinit wait lucid for \
         zsh-users/zsh-autosuggestions \
     blockf atpull'zinit creinstall -q .' \
         zsh-users/zsh-completions
+
+# ZSH Completions configuration
+zinit ice wait lucid atinit'
+zstyle ":completion:*:*:*:*:*" menu select
+zstyle ":completion:*" matcher-list "m:{a-zA-Z-_}={A-Za-z_-}" "r:|=*" "l:|=* r:|=*"
+zstyle ":completion:*" list-colors ""
+zstyle ":completion:*" list-dirs-first true
+zstyle ":completion:*:matches" group "yes"
+zstyle ":completion:*:options" description "yes"
+zstyle ":completion:*:options" auto-description "%d"
+zstyle ":completion:*:corrections" format " %F{green}-- %d (errors: %e) --%f"
+zstyle ":completion:*:descriptions" format " %F{yellow}-- %d --%f"
+zstyle ":completion:*:messages" format " %F{purple} -- %d --%f"
+zstyle ":completion:*:warnings" format " %F{red}-- no matches found --%f"
+zstyle ":completion:*:default" list-prompt "%S%M matches%s"
+zstyle ":completion:*" format " %F{yellow}-- %d --%f"
+zstyle ":completion:*" group-name ""
+zstyle ":completion:*" verbose yes
+zstyle ":completion:*" completer _complete _match _approximate
+zstyle ":completion:*:match:*" original only
+zstyle ":completion:*:approximate:*" max-errors 1 numeric
+zstyle -e ":completion:*:approximate:*" max-errors "reply=($((($#PREFIX+$#SUFFIX)/3))numeric)"
+zstyle ":completion:*:manuals" separate-sections true
+zstyle ":completion:*:manuals.(^1*)" insert-sections true
+zstyle ":completion:*:*:kill:*:processes" list-colors "=(#b) #([0-9]#) ([0-9a-z-]#)*=01;34=0=01"
+zstyle ":completion:*:*:*:*:processes" command "ps -u $USER -o pid,user,comm"
+zstyle ":completion:*:*:kill:*" menu yes select
+'
+zinit ice wait lucid blockf
+zinit light zsh-users/zsh-completions
+
+# kubectl completions (lazy loaded)
+zinit ice wait lucid as"program" pick"kubectl" blockf
+zinit snippet OMZP::kubectl
+
+# Google Cloud SDK
+if [ -f '/Users/hakan.alpay/google-cloud-sdk/path.zsh.inc' ]; then
+  zinit snippet '/Users/hakan.alpay/google-cloud-sdk/path.zsh.inc'
+fi
+if [ -f '/Users/hakan.alpay/google-cloud-sdk/completion.zsh.inc' ]; then
+  zinit snippet '/Users/hakan.alpay/google-cloud-sdk/completion.zsh.inc'
+fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Environment Variables
@@ -46,9 +149,14 @@ export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 
 # FZF
+include ~/.fzf.zsh
 export FZF_DEFAULT_COMMAND='rg --files --no-ignore-vcs --hidden 2>/dev/null'
 export FZF_CTRL_T_COMMAND=$FZF_DEFAULT_COMMAND
 export FZF_DEFAULT_OPTS='--height 50% --layout=reverse --preview-window right:70%'
+
+# Key bindings
+bindkey -e
+bindkey "\e[3~" delete-char
 
 # Artifactory (DoorDash)
 export ARTIFACTORY_USERNAME=hakan.alpay@doordash.com
@@ -57,6 +165,20 @@ export artifactoryUser=${ARTIFACTORY_USERNAME}
 export artifactoryPassword=${ARTIFACTORY_PASSWORD}
 export ARTIFACTORY_URL=https://${ARTIFACTORY_USERNAME/@/%40}:${ARTIFACTORY_PASSWORD}@ddartifacts.jfrog.io/ddartifacts/api/pypi/pypi-local/simple/
 export PIP_EXTRA_INDEX_URL=${ARTIFACTORY_URL}
+
+# Kubernetes contexts
+DEFAULT_KUBE_CONTEXTS="$HOME/.kube/config"
+if [ -f "${DEFAULT_KUBE_CONTEXTS}" ]; then
+  export KUBECONFIG="$DEFAULT_KUBE_CONTEXTS"
+fi
+
+# Additional contexts in ~/.kube/contexts
+CUSTOM_KUBE_CONTEXTS="$HOME/.kube/contexts"
+if [ -d "$CUSTOM_KUBE_CONTEXTS" ] && [ -n "$(ls -A "$CUSTOM_KUBE_CONTEXTS"/*.yaml 2>/dev/null)" ]; then
+  for context_file in "$CUSTOM_KUBE_CONTEXTS"/*.yaml; do
+    [ -f "$context_file" ] && export KUBECONFIG="$context_file:$KUBECONFIG"
+  done
+fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Aliases
@@ -95,6 +217,20 @@ alias bigyarn='NODE_OPTIONS=--max-old-space-size=8192 yarn'
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Functions
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Lazy load kubectl with completions and kubecolor
+if [ -x "$(command -v kubectl)" ]; then
+  kubectl() {
+    unfunction kubectl
+    source <(command kubectl completion zsh)
+    if [ -x "$(command -v kubecolor)" ]; then
+      compdef kubecolor=kubectl
+      alias kubectl='kubecolor'
+    fi
+    command kubectl "$@"
+  }
+  alias k='kubectl'
+fi
 
 # Transform branch name to commit message (for Aviator workflow)
 transform_branch_to_commit_msg() {
