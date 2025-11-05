@@ -1,0 +1,33 @@
+# Gitleaks ignore file - suppress false positives
+# These files contain example secrets in documentation, not real secrets
+
+# Documentation files with example Artifactory secrets
+README-SECRETS.md:artifactory-reference-token:55
+README-SECRETS.md:jfrog-identity-token:55
+QUICK-START-SECRETS.md:artifactory-reference-token:100
+QUICK-START-SECRETS.md:artifactory-reference-token:120
+QUICK-START-SECRETS.md:artifactory-reference-token:25
+QUICK-START-SECRETS.md:jfrog-identity-token:100
+QUICK-START-SECRETS.md:jfrog-identity-token:25
+SCAN-AND-PURGE-SECRETS.md:artifactory-reference-token:254
+SCAN-AND-PURGE-SECRETS.md:artifactory-reference-token:255
+SCAN-AND-PURGE-SECRETS.md:jfrog-identity-token:254
+migrate-secrets.sh:artifactory-reference-token:49
+migrate-secrets.sh:jfrog-identity-token:49
+
+# Example age public key (not a real secret)
+QUICK-START-SECRETS.md:generic-api-key:61
+
+# VSCode Refact.ai API key (free tier, not sensitive)
+vscode-settings/settings.json:generic-api-key:71
+
+# OpenWeatherMap API key (free tier, not sensitive)
+polybar/.config/polybar/weather.py:generic-api-key:12
+
+# Current .zshrc secrets (will be migrated to SOPS)
+# These will be removed after migration to SOPS
+zsh/.zshrc:artifactory-reference-token:278
+zsh/.zshrc:artifactory-reference-token:55
+zsh/.zshrc:jfrog-identity-token:278
+zsh/.zshrc:jfrog-identity-token:55
+
