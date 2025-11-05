@@ -237,18 +237,14 @@ alias bigyarn='NODE_OPTIONS=--max-old-space-size=8192 yarn'
 # Functions
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# Lazy load kubectl with completions and kubecolor
-if [ -x "$(command -v kubectl)" ]; then
-  kubectl() {
-    unfunction kubectl
-    source <(command kubectl completion zsh)
-    if [ -x "$(command -v kubecolor)" ]; then
-      compdef kubecolor=kubectl
-      alias kubectl='kubecolor'
-    fi
-    command kubectl "$@"
-  }
-  alias k='kubectl'
+# Kubecolor wrapper (if installed)
+# Note: kubectl completions and aliases are provided by OMZ kubectl plugin (line 105)
+if [ -x "$(command -v kubecolor)" ]; then
+  alias kubectl='kubecolor'
+  # Set up completion for kubecolor (if compdef is available)
+  if (( $+functions[compdef] )); then
+    compdef kubecolor=kubectl
+  fi
 fi
 
 # Transform branch name to commit message (for Aviator workflow)
