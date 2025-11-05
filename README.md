@@ -18,11 +18,12 @@ Personal dotfiles for macOS/Linux with encrypted secrets management using SOPS.
 ## 📁 What's Inside
 
 ```
- git        > git config and aliases
- nvim       > neovim config
- secrets    > encrypted API keys and credentials (SOPS)
- spells     > automation scripts
- zsh        > shell config with Zinit + Powerlevel10k
+ git         > git config and aliases
+ git-spells  > custom git commands (git keep, git squash-all, etc.)
+ nvim        > neovim config
+ secrets     > encrypted API keys and credentials (SOPS)
+ spells      > automation scripts
+ zsh         > shell config with Zinit + Powerlevel10k
  ```
 
 ## 🚀 Quick Start
@@ -171,6 +172,52 @@ SOPS automatically encrypts the file when you save!
 
 - **`setup-secrets.sh`** - Install SOPS/age and generate encryption keys (one-time setup)
 - **`scan-secrets.sh`** - Scan git history for accidentally committed secrets
+
+## 🪄 Git Spells
+
+Custom Git commands and aliases to supercharge your workflow. See the full [git-spells README](git-spells/README.md) for all commands.
+
+### Notable Custom Commands
+
+**File Management:**
+- `git keep <files>` - Selectively revert changes, keeping only specified files
+- `git m <branch> <files>` - Move files to a different branch in your stack
+- `git remove-large-file <file>` - Remove large files from Git history (with `-g` for glob patterns)
+
+**Branch Management:**
+- `git bf` - Fuzzy-find and checkout a branch (with FZF)
+- `git bdf` - Fuzzy-find and delete a branch
+- `git squash-branch <PR#>` - Apply a GitHub PR as a single commit
+- `git find-branch <name>` - Find which repos contain specific branches
+
+**Commit Workflow:**
+- `git aa "<message>"` - Create branch, commit, push, and create PR (all-in-one!)
+- `git b "<message>"` - Add all, commit, and push
+- `git ac` - Add all and amend (no edit)
+- `git squash-all` - Squash all commits in current branch
+
+**Diff & Viewing:**
+- `git bc [exclude]` - Show branch changes vs main/master (with optional exclusions)
+- `git files-changed` - Show A/M/D status like GitHub PR sidebar
+- `git l` / `git ll` - Pretty log with graph (last 10 / all commits)
+
+**Rebase Helpers:**
+- `git r` - Add all and continue rebase (no editor)
+- `git t` - Accept theirs and continue rebase
+- `git cherry-pit <commit>` - Remove a specific commit from history
+
+### Git Configuration Highlights
+
+The `.gitconfig` includes:
+- **Auto-rebase on pull** - Keeps history clean
+- **Auto-setup remote** - No more `--set-upstream`
+- **Neovim as merge/diff tool** - With Fugitive integration
+- **Git LFS support** - For large files
+- **Conditional configs** - Different settings for work vs personal projects
+- **Custom log format** - Color-coded, compact, and readable
+- **Rerere enabled** - Remember conflict resolutions
+
+See the full [git-spells README](git-spells/README.md) for detailed documentation and examples.
 
 ## ⚡ Performance
 
