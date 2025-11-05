@@ -59,8 +59,6 @@ typeset -g POWERLEVEL9K_RIGHT_PROMPT_LAST_SEGMENT_END_SYMBOL=''
 # P10k config
 [[ -f ~/dotfiles/zsh/.p10k.zsh ]] && source ~/dotfiles/zsh/.p10k.zsh
 
-# asdf (load immediately, not lazy)
-source /opt/homebrew/opt/asdf/libexec/asdf.sh
 
 # Git alias (the only thing we need from OMZ git plugin)
 alias g='git'
@@ -134,6 +132,9 @@ export PNPM_HOME="$HOME/Library/pnpm"
 export PATH="$PNPM_HOME:$PATH"
 export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
+
+# asdf (load after all PATH modifications so shims are first)
+source /opt/homebrew/opt/asdf/libexec/asdf.sh
 
 # FZF
 include ~/.fzf.zsh
