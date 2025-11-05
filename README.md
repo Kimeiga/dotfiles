@@ -205,14 +205,6 @@ The prompt shows your current k8s cluster when you use kubectl:
 
 This is **critical for safety** at DoorDash - you always know which cluster you're operating on!
 
-## 📚 Documentation
-
-All documentation has been consolidated into this README. Previous separate docs:
-- ~~`README-SECRETS.md`~~ - Merged into this README
-- ~~`QUICK-START-SECRETS.md`~~ - Merged into this README
-- ~~`SCAN-AND-PURGE-SECRETS.md`~~ - Merged into this README
-- ~~`SETUP-INSTRUCTIONS.md`~~ - Merged into this README
-
 ## 🤝 Contributing
 
 Feel free to fork and customize for your own use! If you find bugs or have suggestions, open an issue.
