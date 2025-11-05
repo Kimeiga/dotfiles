@@ -34,15 +34,35 @@ git clone https://github.com/Kimeiga/dotfiles.git ~/dotfiles
 cd ~/dotfiles
 ```
 
-### 2. Link ZSH config
+### 2. Install stow (if not already installed)
 
 ```bash
-ln -sf ~/dotfiles/zsh/.zshrc ~/.zshrc
-ln -sf ~/dotfiles/zsh/.zprofile ~/.zprofile
-ln -sf ~/dotfiles/zsh/.p10k.zsh ~/.p10k.zsh
+# macOS
+brew install stow
+
+# Linux (Debian/Ubuntu)
+sudo apt install stow
+
+# Linux (Arch)
+sudo pacman -S stow
 ```
 
-### 3. Set up secrets (optional)
+### 3. Symlink dotfiles with stow
+
+```bash
+# Link ZSH config
+stow zsh
+
+# Link other configs as needed
+stow git
+stow nvim
+stow tmux
+# ... etc
+```
+
+**How stow works:** It creates symlinks in your home directory pointing to files in `~/dotfiles/`. For example, `stow zsh` creates `~/.zshrc` → `~/dotfiles/zsh/.zshrc`.
+
+### 4. Set up secrets (optional)
 
 If you want to use encrypted secrets:
 
@@ -63,13 +83,22 @@ sops --encrypt --in-place secrets/doordash.env
 sops --encrypt --in-place secrets/personal.env
 ```
 
-### 4. Reload your shell
+### 5. Reload your shell
 
 ```bash
 exec zsh
 ```
 
 Done! 🎉
+
+---
+
+**Note:** If you prefer manual symlinks instead of stow, you can use:
+```bash
+ln -sf ~/dotfiles/zsh/.zshrc ~/.zshrc
+ln -sf ~/dotfiles/zsh/.zprofile ~/.zprofile
+ln -sf ~/dotfiles/zsh/.p10k.zsh ~/.p10k.zsh
+```
 
 
 ## 🔐 Secrets Management
