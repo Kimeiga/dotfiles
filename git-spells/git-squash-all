@@ -122,16 +122,18 @@ if [ -z "$base_branch" ]; then
 
   # Find the merge-base with main/master
   merge_base_main=$(git merge-base "$main_branch" HEAD 2>/dev/null || echo "")
+  main_commit_count=$(git rev-list --count "$merge_base_main..HEAD" 2>/dev/null || echo "999999")
 
   # Get all local branches
   all_branches=$(git for-each-ref --format='%(refname:short)' refs/heads/ | grep -v "^$current_branch$")
 
-  # Find the closest branch in the lineage
-  closest_branch=""
-  closest_commit_count=999999
+  # Find the best parent branch in the lineage
+  best_branch="$main_branch"
+  best_commit_count="$main_commit_count"
+  best_merge_base="$merge_base_main"
 
   for branch in $all_branches; do
-    # Skip main/master as we already checked it
+    # Skip main/master as we already have it as default
     if [ "$branch" = "$main_branch" ]; then
       continue
     fi
@@ -147,23 +149,34 @@ if [ -z "$base_branch" ]; then
     # Count commits between merge-base and HEAD
     commit_count=$(git rev-list --count "$merge_base..HEAD")
 
-    # If this branch is closer than the current closest, update
-    if [ "$commit_count" -lt "$closest_commit_count" ]; then
-      # Make sure this branch is in our lineage (merge-base is ahead of main merge-base)
-      if [ -z "$merge_base_main" ] || git merge-base --is-ancestor "$merge_base_main" "$merge_base" 2>/dev/null; then
-        closest_branch="$branch"
-        closest_commit_count="$commit_count"
+    # Only consider this branch if:
+    # 1. It has fewer commits than our current best
+    # 2. It's actually in our lineage (merge-base is ahead of main merge-base)
+    # 3. This branch contains commits that are ancestors of our current branch
+    if [ "$commit_count" -lt "$best_commit_count" ]; then
+      # Verify this branch is a true parent, not a sibling
+      # Check if the merge-base is ahead of the main merge-base
+      if [ -n "$merge_base_main" ] && git merge-base --is-ancestor "$merge_base_main" "$merge_base" 2>/dev/null; then
+        # Additional check: ensure this branch tip is an ancestor of our current branch
+        # This prevents selecting sibling branches
+        if git merge-base --is-ancestor "$branch" HEAD 2>/dev/null; then
+          # Check that this branch actually diverged from main after the main merge-base
+          branch_merge_base_main=$(git merge-base "$main_branch" "$branch" 2>/dev/null || echo "")
+          if [ "$branch_merge_base_main" = "$merge_base_main" ] || git merge-base --is-ancestor "$merge_base_main" "$branch_merge_base_main" 2>/dev/null; then
+            best_branch="$branch"
+            best_commit_count="$commit_count"
+            best_merge_base="$merge_base"
+          fi
+        fi
       fi
     fi
   done
 
-  # Use the closest branch or fall back to main/master
-  if [ -n "$closest_branch" ]; then
-    base_branch="$closest_branch"
-    info "Detected closest branch in lineage: $base_branch"
-  else
-    base_branch="$main_branch"
+  base_branch="$best_branch"
+  if [ "$base_branch" = "$main_branch" ]; then
     info "Using $base_branch as base branch"
+  else
+    info "Detected parent branch in lineage: $base_branch"
   fi
 fi
 

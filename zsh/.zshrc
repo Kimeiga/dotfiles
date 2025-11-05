@@ -36,7 +36,8 @@ SAVEHIST=10000
 # Environment Variables
 export EDITOR=nvim
 export GOPATH=$HOME/go
-export PATH=$PATH:$HOME/dotfiles/av:$HOME/dotfiles/spells:$HOME/dotfiles/git-spells:$GOPATH/bin:$HOME/bin:$HOME/.cargo/bin:$HOME/.npm-global/bin:$PATH
+# Fix: Remove duplicate :$PATH at the end
+export PATH=$HOME/dotfiles/av:$HOME/dotfiles/spells:$HOME/dotfiles/git-spells:$GOPATH/bin:$HOME/bin:$HOME/.cargo/bin:$HOME/.npm-global/bin:$PATH
 export LESSHISTFILE=-
 export GPG_TTY=$(tty)
 export BAT_THEME=base16
@@ -90,11 +91,16 @@ if command -v pyenv &> /dev/null; then
   zinit snippet OMZP::pyenv
 fi
 
-# jenv setup (direct loading instead of using PZTM snippet)
+# jenv setup - lazy load for performance
 if command -v jenv &> /dev/null && [[ ! -n $JENV_LOADED ]]; then
   export PATH="$HOME/.jenv/bin:$PATH"
   export JENV_LOADED=1
-  eval "$(jenv init -)"
+  # Lazy load jenv
+  jenv() {
+    unfunction jenv
+    eval "$(command jenv init -)"
+    command jenv "$@"
+  }
 fi
 
 # ZSH Completions configuration
@@ -130,8 +136,9 @@ zinit light zsh-users/zsh-completions
 
 # FZF
 include ~/.fzf.zsh
-include /usr/share/fzf/key-bindings.zsh
-include /usr/share/fzf/completion.zsh
+# These paths don't exist on macOS, removing for performance
+# include /usr/share/fzf/key-bindings.zsh
+# include /usr/share/fzf/completion.zsh
 export FZF_DEFAULT_COMMAND='rg --files --no-ignore-vcs --hidden 2>/dev/null'
 export FZF_CTRL_T_COMMAND=$FZF_DEFAULT_COMMAND
 export FZF_DEFAULT_OPTS='--height 50% --layout=reverse --preview-window right:70%'
@@ -148,12 +155,13 @@ then
   export KUBECONFIG="$DEFAULT_KUBE_CONTEXTS"
 fi
 # Additional contexts should be in ~/.kube/contexts
+# Optimized: Only run if directory exists and has files
 CUSTOM_KUBE_CONTEXTS="$HOME/.kube/contexts"
-mkdir -p "$CUSTOM_KUBE_CONTEXTS"
-for context_file in `fd '.*.yaml' -t f "$CUSTOM_KUBE_CONTEXTS"`
-do
-  export KUBECONFIG="$context_file:$KUBECONFIG"
-done
+if [ -d "$CUSTOM_KUBE_CONTEXTS" ] && [ -n "$(ls -A "$CUSTOM_KUBE_CONTEXTS"/*.yaml 2>/dev/null)" ]; then
+  for context_file in "$CUSTOM_KUBE_CONTEXTS"/*.yaml; do
+    [ -f "$context_file" ] && export KUBECONFIG="$context_file:$KUBECONFIG"
+  done
+fi
 
 # Aliases
 alias ls='ls --color=auto'
@@ -283,8 +291,8 @@ export artifactoryPassword=${ARTIFACTORY_PASSWORD}
 
 export ARTIFACTORY_URL=https://${ARTIFACTORY_USERNAME/@/%40}:${ARTIFACTORY_PASSWORD}@ddartifacts.jfrog.io/ddartifacts/api/pypi/pypi-local/simple/
 export PIP_EXTRA_INDEX_URL=${ARTIFACTORY_URL}
-# The next line updates PATH for the Google Cloud SDK.
-if [ -f '/Users/hakan.alpay/Downloads/google-cloud-sdk 2/path.zsh.inc' ]; then . '/Users/hakan.alpay/Downloads/google-cloud-sdk 2/path.zsh.inc'; fi
+# Google Cloud SDK is already loaded via zinit above (lines 199-202)
+# Duplicate loading removed for performance
 
-# The next line enables shell command completion for gcloud.
-if [ -f '/Users/hakan.alpay/Downloads/google-cloud-sdk 2/completion.zsh.inc' ]; then . '/Users/hakan.alpay/Downloads/google-cloud-sdk 2/completion.zsh.inc'; fi
+# Added by devbox to ensure ~/.local/bin is on PATH
+export PATH="/Users/hakan.alpay/.local/bin:$PATH"

@@ -1,0 +1,76 @@
+{
+  "editor.fontFamily": "'SF Pro', Menlo, Monaco, 'Courier New', monospace",
+  "terminal.integrated.fontFamily": "JetBrains Mono",
+  "editor.fontSize": 14,
+  "editor.lineHeight": 1.3,
+  "githubPullRequests.pullBranch": "never",
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter"
+  },
+  "svelte.enable-ts-plugin": true,
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "html",
+    "typescriptreact"
+  ],
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "javascript.updateImportsOnFileMove.enabled": "always",
+  "[svelte]": {
+    "editor.defaultFormatter": "svelte.svelte-vscode"
+  },
+  "javascript-repl.context": "Node",
+  "terminal.integrated.scrollback": 10000,
+  "terminal.integrated.persistentSessionScrollback": 1000,
+  "githubPullRequests.terminalLinksHandler": "github",
+  "files.exclude": {
+    "**/.git": false
+  },
+  "diffEditor.ignoreTrimWhitespace": false,
+  "editor.pasteAs.preferences": ["text.updateImports.jsts"],
+  "editor.unicodeHighlight.nonBasicASCII": true,
+  "github.copilot.enable": {
+    "*": false
+  },
+  "remote.defaultExtensionsIfInstalledLocally": [
+    "GitHub.copilot",
+    "GitHub.copilot-chat",
+    "GitHub.vscode-pull-request-github"
+  ],
+  "augment.nextEdit.showDiffInHover": true,
+  "markdown.editor.updateLinksOnPaste.enabled": false,
+  "editor.pasteAs.showPasteSelector": "never",
+  "typescript.updateImportsOnPaste.enabled": false,
+  "javascript.updateImportsOnPaste.enabled": false,
+  "editor.formatOnSave": true,
+  "augment.chat.userGuidelines": "General Principles\nDon't comment obvious code; keep it self-explanatory\nAdding comments will only increase maintenance cost over time\nOmit using comments in the code if it's obvious or self-explanatory\nNever create duplicate files—search the repo first\nAlways follow existing code style and structure\nPrefer modifying existing functions over creating new ones\nDon't maintain backward compatibility unless required\nAlways import packages at the top—no in-line imports\nTypeScript Best Practices\nNever use 'any' type under any circumstances - always find type-safe alternatives\nUse union types with type guards instead of type assertions for property checking\nPrefer optional chaining (func?.()) over conditional checks (if (func) { func() })\nUse proper return type annotations like Record<string, unknown> instead of any\nCreate type guards (item is SpecificType) for safe type checking\nUse descriptive union types instead of casting to any\nProvide clear documentation for edge cases (like when parameters might be undefined)\nReact/Web Guidelines (web-next)\nAvoid useMemo invalidations\nUse lodash for debounce and utility needs\nUse camelCaseObjectKeys for server data\nPrefer optional chaining for cleaner conditional calls\nAPI Guidelines (consumer-client-api-gateway)\nTarget only what's needed—no wide changes\nUse dvsClient.getBoolean() (not runtimeDynamicValues())\nImport experiments from ExperimentNames\nUse specific typed interfaces with descriptive names\nPass minimal, focused parameter objects\nKeep variants consistent in behavior and signatures\nAdd clear, purpose-driven comments where needed\nUse feature flags for opt-in changes; fallback gracefully\nCode Quality Standards\nUse stable identifiers for tracking instead of random strings\nDocument when function parameters can be undefined and why\nPrefer deterministic fallback logic over random generation\nUse type-safe property access with proper type guards\nAvoid\nBroad-scoped updates\nPassing large context objects\nDeprecated APIs\nGeneric types like any (use proper types instead)\nType assertions (as any, as unknown as) - use type guards instead\nExporting locally used types\nUnary ops (++, --)\nViolating .eslintrc or code style rules\nRandom string generation for stable identifiers\nConditional checks when optional chaining is cleaner",
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "typescript.tsserver.watchOptions": {
+    "excludeDirectories": [
+      "**/node_modules",
+      "**/dist",
+      "**/build",
+      "**/.next",
+      "**/coverage",
+      "**/.git"
+    ]
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "refactai.addressURL": "Refact",
+  "refactai.apiKey": "***REMOVED***",
+  "terminal.integrated.fontSize": 10,
+  "gitlens.views.stashes.files.layout": "tree",
+  "typescript.tsserver.experimental.enableProjectDiagnostics": true,
+  "github.copilot.nextEditSuggestions.enabled": true
+}

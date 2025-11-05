@@ -6,6 +6,7 @@
 
 [merge]
   tool = vimdiff
+	commit = auto
 [mergetool]
   keepBackup = false
 [mergetool "vimdiff"]
@@ -13,6 +14,7 @@
 
 [diff]
   tool = vimdiff
+	renameLimit = 20000
 [difftool "vimdiff"]
   cmd = nvim -f -c \"Gdiffsplit!\" \"$MERGED\"
 
@@ -89,6 +91,7 @@
   k = keep
   squash-branch = git-squash-branch
   squash-all = git-squash-all
+  hideall = git-hideall
   # bc = branch-changes
   # bc = "!f() { pattern=\"$1\"; git diff $(git merge-base $(git show-ref --verify --quiet refs/heads/main && echo main || echo master) HEAD) HEAD -- $(test -n \"$pattern\" && echo \":!$pattern\" || echo \".\" ); }; f"
   # bc = "!f() { \
@@ -124,6 +127,7 @@
   excludesfile = ~/.gitignore-global
   # sshCommand = ssh -i ~/.ssh/doordash_rsa
 	fsmonitor = true
+	editor = true
 
 [rerere]
 	enabled = 1
@@ -145,3 +149,5 @@
 [maintenance]
 	repo = /Users/hakan.alpay/Projects/consumer-client-api-gateway
 	repo = /Users/hakan.alpay/Projects/web-next
+[completion]
+	remote = false

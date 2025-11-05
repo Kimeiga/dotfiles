@@ -92,6 +92,7 @@ chmod +x git-spells/*
 | `git s`              | Show status                                            | Alias                        |
 | `git sh`             | Show commit details                                    | Alias                        |
 | `git bc`             | Show diff between current branch and main/master       | Alias                        |
+| `git files-changed`  | Show files changed in current branch with A/M/D status | Script: `git-files-changed`  |
 | `git branch-changes` | Show branch changes with pattern filtering             | Script: `git-branch-changes` |
 
 ### GitHub Integration
@@ -353,6 +354,47 @@ This command requires git-filter-repo to be installed. You can install it with:
 
 ```bash
 pip install git-filter-repo
+```
+
+### git-files-changed
+
+Show files changed in current branch with status (A/M/D), similar to what you see in a GitHub PR sidebar.
+
+```bash
+git files-changed [base_branch]
+```
+
+**When to use it:**
+
+- When you want to see which files were changed in your current branch compared to the base branch
+- When you need a quick overview of what your PR will contain (like GitHub's PR sidebar)
+- When you want to see the status of each file (Added, Modified, or Deleted)
+- When you're preparing to create a PR and want to review what files you've touched
+- When you need to understand the scope of changes in your feature branch
+
+**How it works:**
+
+- Finds the merge base between your current branch and the specified base branch (main/master by default)
+- Uses `git diff --name-status` to show files with their change status
+- Shows cumulative changes across all commits in your branch
+- Provides clear A/M/D status indicators like GitHub
+
+**Output format:**
+
+```
+A    new-file.txt      (Added)
+M    changed-file.txt  (Modified)
+D    deleted-file.txt  (Deleted)
+```
+
+**Examples:**
+
+```bash
+# Show files changed compared to main/master
+git files-changed
+
+# Show files changed compared to develop branch
+git files-changed develop
 ```
 
 ### git-branch-changes

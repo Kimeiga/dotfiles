@@ -1,0 +1,136 @@
+#!/bin/bash
+
+set -e  # Exit on error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Create a temporary directory for testing
+test_dir=$(mktemp -d)
+echo -e "${YELLOW}Creating test repository in${NC} $test_dir"
+
+# Function to clean up
+cleanup() {
+  echo -e "${YELLOW}Cleaning up...${NC}"
+  rm -rf "$test_dir"
+}
+
+# Register cleanup function
+trap cleanup EXIT
+
+# Copy the git-files-changed script to the temp directory
+cp ./git-files-changed "$test_dir/"
+chmod +x "$test_dir/git-files-changed"
+
+# Navigate to test directory
+cd "$test_dir"
+
+# Initialize test repository
+echo -e "${YELLOW}Initializing test repository...${NC}"
+git init
+git config user.name "Test User"
+git config user.email "test@example.com"
+
+# Create initial commit on main branch
+echo "Initial content" > file1.txt
+echo "Initial content" > file2.txt
+mkdir docs
+echo "Initial documentation" > docs/readme.md
+echo "Initial config" > config.json
+git add .
+git commit -m "Initial commit"
+
+# Create a feature branch
+git checkout -b feature-branch
+
+# Make changes to various files to test A/M/D status
+echo "Modified content" > file1.txt              # Modified
+echo "Modified content" > file2.txt              # Modified
+echo "New file content" > new-file.txt           # Added
+rm config.json                                   # Deleted
+echo "Modified documentation" > docs/readme.md   # Modified
+
+git add .
+git commit -m "First set of changes"
+
+# Make more changes in another commit
+echo "More changes" >> file1.txt                 # More modifications
+echo "Another new file" > another-new.txt        # Another addition
+rm docs/readme.md                                # Delete a file
+
+git add .
+git commit -m "Second set of changes"
+
+# Function to run a test case
+run_test() {
+  local test_name="$1"
+  local test_cmd="$2"
+  local verification="$3"
+
+  echo -e "\n${YELLOW}Running test:${NC} $test_name"
+  echo -e "${YELLOW}Command:${NC} $test_cmd"
+
+  # Run the command and capture output
+  if output=$(eval "$test_cmd" 2>&1); then
+    echo -e "${BLUE}Output:${NC}"
+    echo "$output"
+    
+    # Run verification
+    if eval "$verification"; then
+      echo -e "${GREEN}Test passed!${NC}"
+      return 0
+    else
+      echo -e "${RED}Test failed! Verification failed.${NC}"
+      return 1
+    fi
+  else
+    echo -e "${RED}Test failed! Command failed with output:${NC}"
+    echo "$output"
+    return 1
+  fi
+}
+
+# Test 1: Basic functionality - show all changes from feature branch
+run_test "Show all changes from feature branch" \
+  "./git-files-changed > output.txt && cat output.txt" \
+  'grep -q "^M.*file1.txt$" output.txt && grep -q "^M.*file2.txt$" output.txt && grep -q "^A.*new-file.txt$" output.txt && grep -q "^D.*config.json$" output.txt && grep -q "^A.*another-new.txt$" output.txt && grep -q "^D.*docs/readme.md$" output.txt'
+
+# Test 2: Specify base branch explicitly
+run_test "Specify base branch explicitly" \
+  "./git-files-changed main > output.txt && cat output.txt" \
+  'grep -q "^M.*file1.txt$" output.txt && grep -q "^A.*new-file.txt$" output.txt && grep -q "^D.*config.json$" output.txt'
+
+# Test 3: Test on base branch (should show no changes)
+git checkout main
+run_test "Test on base branch (should show no changes)" \
+  "./git-files-changed 2>&1" \
+  'echo "$output" | grep -q "No changes to show"'
+
+# Test 4: Test with non-existent base branch
+git checkout feature-branch
+run_test "Test with non-existent base branch" \
+  "./git-files-changed nonexistent-branch 2>&1 || true" \
+  'echo "$output" | grep -q "does not exist"'
+
+# Test 5: Help option
+run_test "Help option" \
+  "./git-files-changed --help" \
+  'echo "$output" | grep -q "Usage:"'
+
+# Test 6: Create another branch to test different base
+git checkout main
+git checkout -b another-feature
+echo "Different changes" > different-file.txt
+git add .
+git commit -m "Different feature changes"
+
+run_test "Different branch with different changes" \
+  "./git-files-changed main > output.txt && cat output.txt" \
+  'grep -q "^A.*different-file.txt$" output.txt && ! grep -q "new-file.txt" output.txt'
+
+# Overall test results
+echo -e "\n${GREEN}All tests completed!${NC}"

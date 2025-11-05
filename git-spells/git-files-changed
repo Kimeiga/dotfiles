@@ -1,0 +1,130 @@
+#!/bin/bash
+#
+# git-files-changed - Show files changed in current branch with status (A/M/D)
+#
+# This script shows which files were added, modified, or deleted in the current
+# branch compared to the base branch (like what you see in a GitHub PR sidebar).
+#
+# Usage: git files-changed [base_branch]
+#
+# Examples:
+#   git files-changed           # Compare against main/master
+#   git files-changed develop   # Compare against develop branch
+#
+
+set -e  # Exit on error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Function to print error messages
+error() {
+  echo -e "${RED}ERROR: $1${NC}" >&2
+  exit 1
+}
+
+# Function to print info messages
+info() {
+  echo -e "${BLUE}INFO: $1${NC}" >&2
+}
+
+# Function to show usage
+show_usage() {
+  echo "Usage: git files-changed [options] [base_branch]"
+  echo "Show files changed in current branch with status (A/M/D)"
+  echo ""
+  echo "Options:"
+  echo "  -h, --help           Show this help message"
+  echo ""
+  echo "Arguments:"
+  echo "  base_branch          Base branch to compare against (default: main or master)"
+  echo ""
+  echo "Description:"
+  echo "  Shows which files were added (A), modified (M), or deleted (D) in the"
+  echo "  current branch compared to the base branch. This is similar to what you"
+  echo "  see in a GitHub PR sidebar."
+  echo ""
+  echo "Examples:"
+  echo "  # Compare against main/master"
+  echo "  git files-changed"
+  echo ""
+  echo "  # Compare against develop branch"
+  echo "  git files-changed develop"
+  echo ""
+  echo "Output format:"
+  echo "  A    new-file.txt      (Added)"
+  echo "  M    changed-file.txt  (Modified)"
+  echo "  D    deleted-file.txt  (Deleted)"
+}
+
+# Process options
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      show_usage
+      exit 0
+      ;;
+    -*)
+      error "Unknown option: $1"
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+# Get base branch from argument or determine automatically
+base_branch="$1"
+if [ -z "$base_branch" ]; then
+  if git show-ref --verify --quiet refs/heads/main; then
+    base_branch="main"
+  elif git show-ref --verify --quiet refs/heads/master; then
+    base_branch="master"
+  else
+    error "Could not determine main branch. Please specify base branch as argument."
+  fi
+fi
+
+# Verify base branch exists
+if ! git show-ref --verify --quiet refs/heads/"$base_branch"; then
+  error "Base branch '$base_branch' does not exist."
+fi
+
+# Get current branch
+current_branch=$(git branch --show-current)
+if [ -z "$current_branch" ]; then
+  error "Not on a branch (detached HEAD state)."
+fi
+
+# Check if we're on the base branch
+if [ "$current_branch" = "$base_branch" ]; then
+  info "You are on the base branch '$base_branch'. No changes to show."
+  exit 0
+fi
+
+# Get the merge base
+merge_base=$(git merge-base "$base_branch" HEAD 2>/dev/null)
+if [ $? -ne 0 ]; then
+  error "Failed to find merge base with branch '$base_branch'. Make sure both branches have a common ancestor."
+fi
+
+# Get the file changes with status
+changes=$(git diff --name-status "$merge_base" HEAD 2>/dev/null)
+if [ $? -ne 0 ]; then
+  error "Failed to get diff between merge base and HEAD."
+fi
+
+# Check if there are any changes
+if [ -z "$changes" ]; then
+  info "No changes detected between current branch '$current_branch' and '$base_branch'."
+  exit 0
+fi
+
+# Output the changes
+echo "$changes"
+
+exit 0

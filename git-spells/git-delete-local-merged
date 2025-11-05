@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APPLY=${APPLY:-0}          # set APPLY=1 to actually delete
+FORCE_SQUASH=${FORCE_SQUASH:-0}  # set to 1 to force-delete for squashed PRs
+DELETE_CLOSED=${DELETE_CLOSED:-0}  # set to 1 to also delete branches with CLOSED PRs
+FILTER_PATTERN=${FILTER_PATTERN:-}  # set to filter branches by pattern (e.g., "NVE-" or "hakan")
+EXCLUDE_PATTERN=${EXCLUDE_PATTERN:-}  # set to exclude branches by pattern
+
+BASE_BRANCH="$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name')"
+echo "Fetching latest changes..."
+git fetch --prune --quiet
+
+# ignore these locals
+IGNORE_REGEX='^(master|main|develop)$'
+
+while IFS= read -r BR; do
+  [[ "$BR" =~ $IGNORE_REGEX ]] && continue
+
+  # Apply filter pattern if set
+  if [[ -n "$FILTER_PATTERN" ]] && [[ ! "$BR" =~ $FILTER_PATTERN ]]; then
+    continue
+  fi
+
+  # Apply exclude pattern if set
+  if [[ -n "$EXCLUDE_PATTERN" ]] && [[ "$BR" =~ $EXCLUDE_PATTERN ]]; then
+    continue
+  fi
+
+  # Find the newest PR for this branch against base (if any)
+  PR_INFO="$(gh pr list --head "$BR" --base "$BASE_BRANCH" --state all \
+    --json number,state,mergedAt --jq '.[0]')"
+
+  if [[ "$PR_INFO" == "null" || -z "$PR_INFO" ]]; then
+    echo "skip (no PR): $BR"
+    continue
+  fi
+
+  STATE="$(gh pr list --head "$BR" --base "$BASE_BRANCH" --state all \
+    --json state --jq '.[0].state')"
+
+  # Check if we should process this branch based on PR state
+  if [[ "$STATE" == "MERGED" ]]; then
+    # Always process merged PRs
+    :
+  elif [[ "$STATE" == "CLOSED" && "$DELETE_CLOSED" == "1" ]]; then
+    # Process closed PRs only if DELETE_CLOSED is set
+    :
+  else
+    echo "skip (PR state=$STATE): $BR"
+    continue
+  fi
+
+  # Determine the action message based on PR state
+  if [[ "$STATE" == "CLOSED" ]]; then
+    ACTION_DESC="closed PR"
+  else
+    ACTION_DESC="merged cleanly"
+  fi
+
+  # Prefer safe delete (-d) if the branch tip is an ancestor of origin/base
+  if git merge-base --is-ancestor "$BR" "origin/$BASE_BRANCH"; then
+    echo "${APPLY==1 && echo 'delete' || echo 'would delete'} ($ACTION_DESC): $BR"
+    [[ "$APPLY" == "1" ]] && git branch -d "$BR"
+  else
+    if [[ "$FORCE_SQUASH" == "1" ]]; then
+      if [[ "$STATE" == "CLOSED" ]]; then
+        echo "${APPLY==1 && echo 'force-delete' || echo 'would force-delete'} (closed PR, not ancestor): $BR"
+      else
+        echo "${APPLY==1 && echo 'force-delete' || echo 'would force-delete'} (squash/rebase merge): $BR"
+      fi
+      [[ "$APPLY" == "1" ]] && git branch -D "$BR"
+    else
+      if [[ "$STATE" == "CLOSED" ]]; then
+        echo "closed PR but not ancestor: $BR  (set FORCE_SQUASH=1 to force-delete)"
+      else
+        echo "merged PR but not ancestor (likely squashed): $BR  (set FORCE_SQUASH=1 to force-delete)"
+      fi
+    fi
+  fi
+done < <(git for-each-ref --format='%(refname:short)' refs/heads)
