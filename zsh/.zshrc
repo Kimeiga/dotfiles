@@ -156,8 +156,9 @@ fi
 
 # Additional contexts in ~/.kube/contexts
 CUSTOM_KUBE_CONTEXTS="$HOME/.kube/contexts"
-if [ -d "$CUSTOM_KUBE_CONTEXTS" ] && [ -n "$(ls -A "$CUSTOM_KUBE_CONTEXTS"/*.yaml 2>/dev/null)" ]; then
-  for context_file in "$CUSTOM_KUBE_CONTEXTS"/*.yaml; do
+if [ -d "$CUSTOM_KUBE_CONTEXTS" ]; then
+  setopt local_options null_glob  # Don't error on no matches
+  for context_file in "$CUSTOM_KUBE_CONTEXTS"/*.yaml(N); do
     [ -f "$context_file" ] && export KUBECONFIG="$context_file:$KUBECONFIG"
   done
 fi
