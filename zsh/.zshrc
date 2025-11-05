@@ -147,42 +147,33 @@ bindkey "\e[3~" delete-char
 # Set SOPS age key location
 export SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt
 
-# Load DoorDash/Artifactory secrets
-if command -v sops &> /dev/null && [ -f ~/dotfiles/secrets/doordash.env ]; then
-  while IFS='=' read -r key value; do
-    # Skip comments and empty lines
-    [[ "$key" =~ ^#.*$ ]] && continue
-    [[ -z "$key" ]] && continue
-    # Export the variable
-    export "$key=$value"
-  done < <(sops --decrypt ~/dotfiles/secrets/doordash.env 2>/dev/null || true)
-
-  # Derived variables (computed from secrets)
-  if [ -n "$ARTIFACTORY_USERNAME" ] && [ -n "$ARTIFACTORY_PASSWORD" ]; then
-    export artifactoryUser=${ARTIFACTORY_USERNAME}
-    export artifactoryPassword=${ARTIFACTORY_PASSWORD}
-    export ARTIFACTORY_URL=https://${ARTIFACTORY_USERNAME/@/%40}:${ARTIFACTORY_PASSWORD}@ddartifacts.jfrog.io/ddartifacts/api/pypi/pypi-local/simple/
-    export PIP_EXTRA_INDEX_URL=${ARTIFACTORY_URL}
+# Helper function to load secrets from SOPS-encrypted files
+load_secrets() {
+  local secrets_file="$1"
+  if command -v sops &> /dev/null && [ -f "$secrets_file" ]; then
+    while IFS='=' read -r key value; do
+      # Skip comments and empty lines
+      [[ "$key" =~ ^#.*$ ]] && continue
+      [[ -z "$key" ]] && continue
+      # Export the variable
+      export "$key=$value"
+    done < <(sops --decrypt "$secrets_file" 2>/dev/null || true)
   fi
+}
+
+# Load DoorDash work secrets (Artifactory, etc.)
+load_secrets ~/dotfiles/secrets/doordash.env
+
+# Derived variables for Artifactory (computed from secrets)
+if [ -n "$ARTIFACTORY_USERNAME" ] && [ -n "$ARTIFACTORY_PASSWORD" ]; then
+  export artifactoryUser=${ARTIFACTORY_USERNAME}
+  export artifactoryPassword=${ARTIFACTORY_PASSWORD}
+  export ARTIFACTORY_URL=https://${ARTIFACTORY_USERNAME/@/%40}:${ARTIFACTORY_PASSWORD}@ddartifacts.jfrog.io/ddartifacts/api/pypi/pypi-local/simple/
+  export PIP_EXTRA_INDEX_URL=${ARTIFACTORY_URL}
 fi
 
-# Load Refact.ai secrets (if exists)
-if command -v sops &> /dev/null && [ -f ~/dotfiles/secrets/refactai.env ]; then
-  while IFS='=' read -r key value; do
-    [[ "$key" =~ ^#.*$ ]] && continue
-    [[ -z "$key" ]] && continue
-    export "$key=$value"
-  done < <(sops --decrypt ~/dotfiles/secrets/refactai.env 2>/dev/null || true)
-fi
-
-# Load OpenWeatherMap secrets (if exists)
-if command -v sops &> /dev/null && [ -f ~/dotfiles/secrets/openweathermap.env ]; then
-  while IFS='=' read -r key value; do
-    [[ "$key" =~ ^#.*$ ]] && continue
-    [[ -z "$key" ]] && continue
-    export "$key=$value"
-  done < <(sops --decrypt ~/dotfiles/secrets/openweathermap.env 2>/dev/null || true)
-fi
+# Load personal API keys (Refact.ai, OpenWeatherMap, etc.)
+load_secrets ~/dotfiles/secrets/personal.env
 
 # Kubernetes contexts
 DEFAULT_KUBE_CONTEXTS="$HOME/.kube/config"
