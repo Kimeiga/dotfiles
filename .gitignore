@@ -4,10 +4,13 @@ result*
 packer_compiled.lua
 .DS_Store
 
-# Secrets - IMPORTANT: Only commit encrypted files!
-# Unencrypted .env files should NEVER be committed
+# Secrets - IMPORTANT: Only commit encrypted SOPS files in secrets/ directory!
+# Allow encrypted .env files in secrets/ directory (negation must come BEFORE the wildcard)
+!secrets/*.env
+# Ignore .env files everywhere else
 *.env
-!secrets/*.env  # Allow encrypted .env files in secrets/ directory
+.env
+.env.*
 secrets/zshrc-snippet.txt  # This is just a template, not needed in repo
 
 # SOPS age private keys (NEVER commit these!)

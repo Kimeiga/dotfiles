@@ -144,6 +144,9 @@ bindkey "\e[3~" delete-char
 # Secrets (loaded from encrypted SOPS files)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+# Set SOPS age key location
+export SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt
+
 # Load DoorDash/Artifactory secrets
 if command -v sops &> /dev/null && [ -f ~/dotfiles/secrets/doordash.env ]; then
   while IFS='=' read -r key value; do
