@@ -109,17 +109,24 @@ typeset -g POWERLEVEL9K_VCS_UNSTAGED_MAX_NUM=1
 typeset -g POWERLEVEL9K_VCS_UNTRACKED_MAX_NUM=1
 typeset -g POWERLEVEL9K_VCS_CONFLICTED_MAX_NUM=1
 
-# Minimal spacing
+# Minimal spacing - no separators between segments
 typeset -g POWERLEVEL9K_LEFT_SEGMENT_SEPARATOR=''
 typeset -g POWERLEVEL9K_RIGHT_SEGMENT_SEPARATOR=''
-typeset -g POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR=' '
-typeset -g POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR=' '
+typeset -g POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR=''
+typeset -g POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR=''
+
+# Whitespace between segments (single space)
+typeset -g POWERLEVEL9K_WHITESPACE_BETWEEN_LEFT_SEGMENTS=' '
+typeset -g POWERLEVEL9K_WHITESPACE_BETWEEN_RIGHT_SEGMENTS=' '
 
 # Remove leading/trailing spaces
-typeset -g POWERLEVEL9K_LEFT_PROMPT_FIRST_SEGMENT_START_SYMBOL=''  # No space before first segment
-typeset -g POWERLEVEL9K_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL=''     # No space after last segment
-typeset -g POWERLEVEL9K_RIGHT_PROMPT_FIRST_SEGMENT_START_SYMBOL='' # No space before right prompt
-typeset -g POWERLEVEL9K_RIGHT_PROMPT_LAST_SEGMENT_END_SYMBOL=' '   # One space after right prompt
+typeset -g POWERLEVEL9K_LEFT_PROMPT_FIRST_SEGMENT_START_SYMBOL=' '  # One space before first segment
+typeset -g POWERLEVEL9K_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL=''      # No space after last segment
+typeset -g POWERLEVEL9K_RIGHT_PROMPT_FIRST_SEGMENT_START_SYMBOL=''  # No space before right prompt
+typeset -g POWERLEVEL9K_RIGHT_PROMPT_LAST_SEGMENT_END_SYMBOL=' '    # One space after right prompt
+
+# No extra space after prompt character
+typeset -g POWERLEVEL9K_PROMPT_CHAR_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL=''
 
 # No icons/powerline symbols (clean look)
 typeset -g POWERLEVEL9K_MODE=ascii
