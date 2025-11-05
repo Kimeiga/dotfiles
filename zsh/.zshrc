@@ -1,14 +1,20 @@
-# Helper function for sourcing files if they exist
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# INSTANT PROMPT - Must be at the very top!
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Helper Functions
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 include() {
   test -f "$@" && source "$@"
 }
 
-# Helper function for sourcing files if they exist
-include() {
-  test -f "$@" && source "$@"
-}
-
-# Zinit setup
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Zinit Setup
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ZINIT_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/zinit/zinit.git"
 [ ! -d $ZINIT_HOME ] && mkdir -p "$(dirname $ZINIT_HOME)"
 [ ! -d $ZINIT_HOME/.git ] && git clone https://github.com/zdharma-continuum/zinit.git "$ZINIT_HOME"
@@ -23,7 +29,9 @@ zinit light-mode for \
     zdharma-continuum/zinit-annex-patch-dl \
     zdharma-continuum/zinit-annex-rust
 
-# ZSH History settings
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ZSH History Settings
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 setopt extended_history
 setopt inc_append_history
 setopt share_history
@@ -37,35 +45,6 @@ setopt interactivecomments
 HISTSIZE=10000
 HISTFILE=~/.zsh_history
 SAVEHIST=10000
-autoload -Uz _zinit
-(( ${+_comps} )) && _comps[zinit]=_zinit
-
-# Load Zinit annexes
-zinit light-mode for \
-    zdharma-continuum/zinit-annex-as-monitor \
-    zdharma-continuum/zinit-annex-bin-gem-node \
-    zdharma-continuum/zinit-annex-patch-dl \
-    zdharma-continuum/zinit-annex-rust
-
-# ZSH History settings
-setopt extended_history
-setopt inc_append_history
-setopt share_history
-setopt hist_ignore_dups
-setopt hist_ignore_all_dups
-setopt hist_expire_dups_first
-setopt hist_save_no_dups
-setopt hist_ignore_space
-setopt hist_verify
-setopt interactivecomments
-HISTSIZE=10000
-HISTFILE=~/.zsh_history
-SAVEHIST=10000
-
-# Enable Powerlevel10k instant prompt
-if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
-  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
-fi
 
 # Load Powerlevel10k
 zinit ice depth=1
@@ -78,7 +57,8 @@ zinit light romkatv/powerlevel10k
 zinit ice wait lucid
 zinit snippet /opt/homebrew/opt/asdf/libexec/asdf.sh
 
-# Git plugin
+# Git plugin (lazy loaded)
+zinit ice wait lucid
 zinit snippet ~/git.plugin.zsh
 
 # Syntax highlighting, autosuggestions
@@ -124,11 +104,13 @@ zinit light zsh-users/zsh-completions
 zinit ice wait lucid as"program" pick"kubectl" blockf
 zinit snippet OMZP::kubectl
 
-# Google Cloud SDK
+# Google Cloud SDK (lazy loaded to avoid console output during instant prompt)
 if [ -f '/Users/hakan.alpay/google-cloud-sdk/path.zsh.inc' ]; then
+  zinit ice wait lucid
   zinit snippet '/Users/hakan.alpay/google-cloud-sdk/path.zsh.inc'
 fi
 if [ -f '/Users/hakan.alpay/google-cloud-sdk/completion.zsh.inc' ]; then
+  zinit ice wait lucid
   zinit snippet '/Users/hakan.alpay/google-cloud-sdk/completion.zsh.inc'
 fi
 
