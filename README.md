@@ -143,8 +143,17 @@ SOPS automatically encrypts the file when you save!
 1. **Restore your age key** (from 1Password or backup):
    ```bash
    mkdir -p ~/.config/sops/age
-   # Paste your age private key into:
+
+   # Paste your entire age key backup (all 3 lines) into:
    vim ~/.config/sops/age/keys.txt
+
+   # Should look like:
+   # # created: 2025-11-04T20:41:24-05:00
+   # # public key: age18uksntc4lz58z0tkf9vh28m7pazycnwty3dgs0r8p09vg8j8mdwqhhqvau
+   # AGE-SECRET-KEY-1U6A2HUNGA933K9W59EP0LGEXWHZ6MC3S7VCSMKNPDGTJ450XL9PS534RA2
+
+   # Set correct permissions
+   chmod 600 ~/.config/sops/age/keys.txt
    ```
 
 2. **Clone and link dotfiles** (see Quick Start above)
@@ -160,17 +169,8 @@ SOPS automatically encrypts the file when you save!
 
 ## 🛠️ Tools & Scripts
 
-### Available scripts
-
 - **`setup-secrets.sh`** - Install SOPS/age and generate encryption keys (one-time setup)
 - **`scan-secrets.sh`** - Scan git history for accidentally committed secrets
-
-### Removed scripts (already completed)
-
-These were one-time migration scripts and have been removed:
-- ~~`create-encrypted-secrets.sh`~~ - Use `sops` directly instead
-- ~~`migrate-secrets.sh`~~ - Migration already completed
-- ~~`purge-secrets.sh`~~ - History already purged (dangerous to keep)
 
 ## ⚡ Performance
 
