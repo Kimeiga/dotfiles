@@ -47,6 +47,7 @@ chmod +x git-spells/*
 
 | Command             | Description                                       | Source                      |
 | ------------------- | ------------------------------------------------- | --------------------------- |
+| `git smartlog`      | Show branch-centric repository view (like git sl) | Script: `git-smartlog`      |
 | `git find-branch`   | Find which repositories contain specific branches | Script: `git-find-branch`   |
 | `git squash-branch` | Apply a GitHub PR as a single commit              | Script: `git-squash-branch` |
 | `git bb`            | List all branches                                 | Alias                       |
@@ -514,6 +515,110 @@ The script comes with a comprehensive test suite (`git-find-branch-test`) that v
 - Handling nonexistent branches gracefully
 - Testing verbose output
 - Validating error handling for invalid inputs
+
+### git-smartlog
+
+Show a branch-centric view of your repository, displaying each branch, where it forked from the baseline, and which commits are unique to that branch. This is similar to `git sl` from git-branchless but uses native Git commands that work with reftable repositories.
+
+```bash
+git smartlog [options] [baseline]
+```
+
+**When to use it:**
+
+- When you want to see an overview of all your feature branches and their commits
+- When you need to understand the relationship between branches and the main branch
+- When you're working with multiple feature branches and want to see what's in each
+- When you want a cleaner, more organized view than `git log --graph`
+- When you're using repositories with reftable backend (where git-branchless may not work)
+- When you want to quickly see which branches have unique commits
+
+**How it works:**
+
+- Uses native Git plumbing commands (`git for-each-ref`, `git merge-base`, `git rev-list`)
+- Works with both traditional ref storage and reftable backends
+- Finds the fork point for each branch relative to the baseline (master/main by default)
+- Lists commits unique to each branch (not in the baseline)
+- Shows a clean, colorful output with branch names, fork points, and commit lists
+- Automatically detects the baseline branch (master or main)
+
+**Options:**
+
+- `-n <num>`: Maximum number of commits to show per branch (default: 5)
+- `-a`: Show all commits (no limit)
+- `-v`: Verbose output - show commit author and date
+- `-r`: Include remote branches
+- `-h`: Show help message
+
+**Arguments:**
+
+- `baseline`: The baseline branch to compare against (default: master or main)
+
+**Examples:**
+
+```bash
+# Show smartlog against master/main
+git smartlog
+
+# Show smartlog against develop branch
+git smartlog develop
+
+# Show all commits (no limit)
+git smartlog -a
+
+# Show only 3 commits per branch
+git smartlog -n 3
+
+# Include remote branches
+git smartlog -r
+
+# Verbose output with author and date
+git smartlog -v
+```
+
+**Output format:**
+
+```
+╔════════════════════════════════════════════════════════════════╗
+║  Git Smartlog - Branch-centric repository view                 ║
+╚════════════════════════════════════════════════════════════════╝
+
+Baseline: master
+
+● feature/auth
+  ├─ fork: abc1234 Initial commit
+  ├─ commits: 2
+  └─ recent commits:
+     def5678 Improve auth security
+     ghi9012 Add authentication
+
+● bugfix/critical
+  ├─ fork: abc1234 Initial commit
+  ├─ commits: 1
+  └─ recent commits:
+     jkl3456 Fix critical bug
+
+✓ Smartlog complete
+```
+
+**Why use this instead of git-branchless?**
+
+- Works with reftable repositories (git-branchless may have issues)
+- Uses only native Git commands (no external dependencies)
+- Simpler and more focused on branch visualization
+- Easier to customize and extend
+- Works on any system with Git installed
+
+**Testing:**
+The script comes with a comprehensive test suite (`git-smartlog-test`) that verifies its functionality in various scenarios, including:
+
+- Auto-detecting baseline branch (master/main)
+- Showing correct number of commits per branch
+- Respecting max commits limit
+- Showing all commits with `-a` flag
+- Detecting fork points correctly
+- Verbose output with author and date
+- Error handling for invalid inputs
 
 ### git-squash-all
 

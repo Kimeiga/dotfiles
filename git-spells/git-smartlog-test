@@ -1,0 +1,358 @@
+#!/bin/bash
+
+# Test script for git-smartlog
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Test counters
+TESTS_RUN=0
+TESTS_PASSED=0
+TESTS_FAILED=0
+
+# Function to print test results
+print_test_result() {
+  local test_name="$1"
+  local result="$2"
+  
+  TESTS_RUN=$((TESTS_RUN + 1))
+  
+  if [ "$result" = "PASS" ]; then
+    echo -e "${GREEN}✓ PASS${NC}: $test_name"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+  else
+    echo -e "${RED}✗ FAIL${NC}: $test_name"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+  fi
+}
+
+# Function to test help output
+test_help_output() {
+  local test_name="Help output contains usage information"
+  echo -e "${BLUE}Running test: $test_name${NC}"
+  
+  local help_output
+  help_output=$(./git-smartlog -h 2>&1 || true)
+  
+  if echo "$help_output" | grep -q "Usage:" && echo "$help_output" | grep -q "smartlog"; then
+    print_test_result "$test_name" "PASS"
+  else
+    print_test_result "$test_name" "FAIL"
+    echo "  Help output doesn't contain expected usage information"
+  fi
+}
+
+# Function to test error handling for invalid baseline
+test_invalid_baseline() {
+  local test_name="Error when invalid baseline provided"
+  echo -e "${BLUE}Running test: $test_name${NC}"
+  
+  cd "$TEST_DIR/test-repo"
+  
+  local error_output
+  error_output=$(../git-smartlog nonexistent-branch 2>&1 || true)
+  
+  if echo "$error_output" | grep -q "ERROR.*does not exist"; then
+    print_test_result "$test_name" "PASS"
+  else
+    print_test_result "$test_name" "FAIL"
+    echo "  Expected error message not found"
+  fi
+}
+
+# Function to test invalid max commits
+test_invalid_max_commits() {
+  local test_name="Error when invalid max commits provided"
+  echo -e "${BLUE}Running test: $test_name${NC}"
+  
+  cd "$TEST_DIR/test-repo"
+  
+  local error_output
+  error_output=$(../git-smartlog -n abc 2>&1 || true)
+  
+  if echo "$error_output" | grep -q "ERROR.*must be a positive integer"; then
+    print_test_result "$test_name" "PASS"
+  else
+    print_test_result "$test_name" "FAIL"
+    echo "  Expected error message not found"
+  fi
+}
+
+# Function to create test environment
+setup_test_environment() {
+  echo -e "${YELLOW}Setting up test environment...${NC}"
+  
+  # Create temporary directory for testing
+  TEST_DIR=$(mktemp -d)
+  cd "$TEST_DIR"
+  
+  # Create a test repository
+  mkdir -p test-repo
+  cd test-repo
+  
+  git init >/dev/null 2>&1
+  git config user.email "test@example.com"
+  git config user.name "Test User"
+  
+  # Create initial commit on master
+  echo "initial" > file.txt
+  git add file.txt
+  git commit -m "Initial commit" >/dev/null 2>&1
+  
+  # Ensure we're on master (or main)
+  git branch -M master >/dev/null 2>&1 || true
+  
+  # Create feature-1 branch with 2 commits
+  git checkout -b feature-1 >/dev/null 2>&1
+  echo "feature1-change1" >> file.txt
+  git add file.txt
+  git commit -m "Feature 1: First change" >/dev/null 2>&1
+  echo "feature1-change2" >> file.txt
+  git add file.txt
+  git commit -m "Feature 1: Second change" >/dev/null 2>&1
+  
+  # Create feature-2 branch from master with 3 commits
+  git checkout master >/dev/null 2>&1
+  git checkout -b feature-2 >/dev/null 2>&1
+  echo "feature2-change1" >> file2.txt
+  git add file2.txt
+  git commit -m "Feature 2: First change" >/dev/null 2>&1
+  echo "feature2-change2" >> file2.txt
+  git add file2.txt
+  git commit -m "Feature 2: Second change" >/dev/null 2>&1
+  echo "feature2-change3" >> file2.txt
+  git add file2.txt
+  git commit -m "Feature 2: Third change" >/dev/null 2>&1
+  
+  # Create bugfix branch from master with 1 commit
+  git checkout master >/dev/null 2>&1
+  git checkout -b bugfix-urgent >/dev/null 2>&1
+  echo "bugfix" >> file.txt
+  git add file.txt
+  git commit -m "Bugfix: Critical fix" >/dev/null 2>&1
+  
+  # Go back to master
+  git checkout master >/dev/null 2>&1
+  
+  # Copy the git-smartlog script to test directory
+  cp "$ORIGINAL_DIR/git-spells/git-smartlog" "$TEST_DIR/"
+  chmod +x "$TEST_DIR/git-smartlog"
+  
+  echo -e "${GREEN}Test environment created at: $TEST_DIR${NC}"
+}
+
+# Function to cleanup test environment
+cleanup_test_environment() {
+  if [ -n "$TEST_DIR" ] && [ -d "$TEST_DIR" ]; then
+    rm -rf "$TEST_DIR"
+    echo -e "${YELLOW}Test environment cleaned up${NC}"
+  fi
+}
+
+# Function to test basic functionality
+test_basic_functionality() {
+  local test_name="Show branches with commits ahead of master"
+  echo -e "${BLUE}Running test: $test_name${NC}"
+  
+  cd "$TEST_DIR/test-repo"
+  
+  local output
+  output=$(../git-smartlog 2>&1)
+  
+  if echo "$output" | grep -q "feature-1" && \
+     echo "$output" | grep -q "feature-2" && \
+     echo "$output" | grep -q "bugfix-urgent"; then
+    print_test_result "$test_name" "PASS"
+  else
+    print_test_result "$test_name" "FAIL"
+    echo "  Expected to find all feature branches"
+    echo "  Output: $output"
+  fi
+}
+
+# Function to test commit counting
+test_commit_counting() {
+  local test_name="Show correct number of commits per branch"
+  echo -e "${BLUE}Running test: $test_name${NC}"
+
+  cd "$TEST_DIR/test-repo"
+
+  local output
+  output=$(../git-smartlog 2>&1)
+
+  # Strip ANSI color codes for easier matching
+  local clean_output
+  clean_output=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g')
+
+  # Check that feature-2 shows 3 commits
+  if echo "$clean_output" | grep -A 5 "feature-2" | grep -q "commits: 3"; then
+    print_test_result "$test_name" "PASS"
+  else
+    print_test_result "$test_name" "FAIL"
+    echo "  Expected feature-2 to show 3 commits"
+    echo "  Actual output:"
+    echo "$clean_output" | grep -A 10 "feature-2" | head -15
+  fi
+}
+
+# Function to test max commits limit
+test_max_commits_limit() {
+  local test_name="Respect max commits limit"
+  echo -e "${BLUE}Running test: $test_name${NC}"
+
+  cd "$TEST_DIR/test-repo"
+
+  local output
+  output=$(../git-smartlog -n 2 2>&1)
+
+  # Strip ANSI color codes
+  local clean_output
+  clean_output=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g')
+
+  # Should show "3 total (showing 2)" for feature-2
+  if echo "$clean_output" | grep -A 5 "feature-2" | grep -q "3 total (showing 2)"; then
+    print_test_result "$test_name" "PASS"
+  else
+    print_test_result "$test_name" "FAIL"
+    echo "  Expected to show limit message for feature-2"
+    echo "  Actual output:"
+    echo "$clean_output" | grep -A 10 "feature-2" | head -15
+  fi
+}
+
+# Function to test show all commits
+test_show_all_commits() {
+  local test_name="Show all commits with -a flag"
+  echo -e "${BLUE}Running test: $test_name${NC}"
+
+  cd "$TEST_DIR/test-repo"
+
+  local output
+  output=$(../git-smartlog -a 2>&1)
+
+  # Strip ANSI color codes
+  local clean_output
+  clean_output=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g')
+
+  # Should show all 3 commits for feature-2 without limit message
+  if echo "$clean_output" | grep -A 5 "feature-2" | grep -q "commits: 3" && \
+     ! echo "$clean_output" | grep -q "showing"; then
+    print_test_result "$test_name" "PASS"
+  else
+    print_test_result "$test_name" "FAIL"
+    echo "  Expected to show all commits without limit message"
+    echo "  Actual output:"
+    echo "$clean_output" | grep -A 10 "feature-2" | head -15
+  fi
+}
+
+# Function to test fork point detection
+test_fork_point() {
+  local test_name="Detect fork point correctly"
+  echo -e "${BLUE}Running test: $test_name${NC}"
+  
+  cd "$TEST_DIR/test-repo"
+  
+  local output
+  output=$(../git-smartlog 2>&1)
+  
+  # Should show fork point for each branch
+  if echo "$output" | grep -q "fork:"; then
+    print_test_result "$test_name" "PASS"
+  else
+    print_test_result "$test_name" "FAIL"
+    echo "  Expected to show fork point information"
+  fi
+}
+
+# Function to test verbose output
+test_verbose_output() {
+  local test_name="Verbose output shows author and date"
+  echo -e "${BLUE}Running test: $test_name${NC}"
+  
+  cd "$TEST_DIR/test-repo"
+  
+  local output
+  output=$(../git-smartlog -v 2>&1)
+  
+  # Verbose should show author name
+  if echo "$output" | grep -q "Test User"; then
+    print_test_result "$test_name" "PASS"
+  else
+    print_test_result "$test_name" "FAIL"
+    echo "  Expected verbose output to show author information"
+  fi
+}
+
+# Function to test baseline detection
+test_baseline_detection() {
+  local test_name="Auto-detect master as baseline"
+  echo -e "${BLUE}Running test: $test_name${NC}"
+  
+  cd "$TEST_DIR/test-repo"
+  
+  local output
+  output=$(../git-smartlog 2>&1)
+  
+  if echo "$output" | grep -q "Baseline: master"; then
+    print_test_result "$test_name" "PASS"
+  else
+    print_test_result "$test_name" "FAIL"
+    echo "  Expected to auto-detect master as baseline"
+  fi
+}
+
+# Main test execution
+main() {
+  echo -e "${BLUE}Starting git-smartlog tests...${NC}"
+  echo ""
+  
+  # Store original directory
+  ORIGINAL_DIR=$(pwd)
+  
+  # Set up trap for cleanup
+  trap 'cleanup_test_environment; cd "$ORIGINAL_DIR"' EXIT
+  
+  # Test help and error handling (don't need test environment)
+  cd "$ORIGINAL_DIR/git-spells"
+  test_help_output
+  
+  # Set up test environment for functional tests
+  setup_test_environment
+  
+  # Run functional tests
+  test_invalid_baseline
+  test_invalid_max_commits
+  test_basic_functionality
+  test_commit_counting
+  test_max_commits_limit
+  test_show_all_commits
+  test_fork_point
+  test_verbose_output
+  test_baseline_detection
+  
+  # Print summary
+  echo ""
+  echo -e "${BLUE}Test Summary:${NC}"
+  echo "  Tests run: $TESTS_RUN"
+  echo -e "  Passed: ${GREEN}$TESTS_PASSED${NC}"
+  echo -e "  Failed: ${RED}$TESTS_FAILED${NC}"
+  
+  if [ $TESTS_FAILED -eq 0 ]; then
+    echo -e "${GREEN}All tests passed!${NC}"
+    exit 0
+  else
+    echo -e "${RED}Some tests failed.${NC}"
+    exit 1
+  fi
+}
+
+# Run main function
+main "$@"
+

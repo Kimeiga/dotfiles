@@ -1,0 +1,214 @@
+#!/bin/bash
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+NC='\033[0m' # No Color
+
+# Function to print error messages
+error() {
+  echo -e "${RED}ERROR: $1${NC}" >&2
+  exit 1
+}
+
+# Function to print warning messages
+warn() {
+  echo -e "${YELLOW}WARNING: $1${NC}" >&2
+}
+
+# Function to print info messages
+info() {
+  echo -e "${BLUE}$1${NC}"
+}
+
+# Function to print success messages
+success() {
+  echo -e "${GREEN}$1${NC}"
+}
+
+# Function to show usage
+show_usage() {
+  echo "Usage: git smartlog [options] [baseline]"
+  echo "Show a smart log of all branches and their commits relative to a baseline branch"
+  echo ""
+  echo "Description:"
+  echo "  git-smartlog shows a branch-centric view of your repository, displaying"
+  echo "  each branch, where it forked from the baseline, and which commits are"
+  echo "  unique to that branch. This is similar to 'git sl' from git-branchless"
+  echo "  but uses native Git commands that work with reftable repositories."
+  echo ""
+  echo "Options:"
+  echo "  -v            Verbose output - show commit author"
+  echo "  -r            Include remote branches"
+  echo "  -h            Show this help message"
+  echo ""
+  echo "Arguments:"
+  echo "  baseline      The baseline branch to compare against (default: master or main)"
+  echo ""
+  echo "Examples:"
+  echo "  # Show smartlog against master/main"
+  echo "  git smartlog"
+  echo ""
+  echo "  # Show smartlog against develop branch"
+  echo "  git smartlog develop"
+  echo ""
+  echo "  # Show all commits (no limit)"
+  echo "  git smartlog -a"
+  echo ""
+  echo "  # Show only 3 commits per branch"
+  echo "  git smartlog -n 3"
+  echo ""
+  echo "  # Include remote branches"
+  echo "  git smartlog -r"
+}
+
+# Default options
+verbose=false
+include_remote=false
+baseline=""
+
+# Process options
+while getopts "vrh" opt; do
+  case $opt in
+    v) verbose=true ;;
+    r) include_remote=true ;;
+    h) show_usage; exit 0 ;;
+    *) show_usage; exit 1 ;;
+  esac
+done
+
+# Shift to remove options from arguments
+shift $((OPTIND-1))
+
+# Get baseline branch
+if [ -n "$1" ]; then
+  baseline="$1"
+else
+  # Auto-detect baseline: prefer master, then main, then current branch
+  if git show-ref --verify --quiet refs/heads/master; then
+    baseline="master"
+  elif git show-ref --verify --quiet refs/heads/main; then
+    baseline="main"
+  else
+    baseline=$(git rev-parse --abbrev-ref HEAD)
+  fi
+fi
+
+# Validate baseline exists
+if ! git show-ref --verify --quiet "refs/heads/$baseline" 2>/dev/null; then
+  error "Baseline branch '$baseline' does not exist"
+fi
+
+# Print header
+echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}║${NC}  ${MAGENTA}Git Smartlog${NC} - Branch-centric repository view           ${CYAN}║${NC}"
+echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+info "Baseline: $baseline"
+echo ""
+
+# Get list of branches
+if $include_remote; then
+  branches=$(git for-each-ref --format='%(refname:short)' refs/heads refs/remotes | sort)
+else
+  branches=$(git for-each-ref --format='%(refname:short)' refs/heads | sort)
+fi
+
+# Build the list of branches to show (exclude baseline and remotes)
+local_branches=()
+while IFS= read -r branch; do
+  # Skip baseline branch
+  if [ "$branch" = "$baseline" ]; then
+    continue
+  fi
+  # Skip remote branches (only show local branches)
+  if [[ "$branch" == origin/* ]] || [[ "$branch" == upstream/* ]]; then
+    continue
+  fi
+  local_branches+=("$branch")
+done <<< "$branches"
+
+# If no branches found, show message and exit
+if [ ${#local_branches[@]} -eq 0 ]; then
+  warn "No local branches found (other than $baseline)"
+  exit 0
+fi
+
+# Get current branch
+current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+
+# Show each branch with its commits
+for branch in "${local_branches[@]}"; do
+    # Find fork point
+    fork=$(git merge-base --fork-point "refs/heads/$baseline" "$branch" 2>/dev/null || \
+           git merge-base "refs/heads/$baseline" "$branch" 2>/dev/null || \
+           echo "")
+
+    if [ -z "$fork" ]; then
+      continue
+    fi
+
+    # Get commits unique to this branch with dates in one call
+    commits=$(git log --format='%h|%ar|%s' "$branch" ^"$baseline" 2>/dev/null || echo "")
+
+    if [ -z "$commits" ]; then
+      continue
+    fi
+
+    # Print fork point from master
+    fork_short=$(echo "$fork" | cut -c1-7)
+    fork_info=$(git log --format='%ar|%s' -1 "$fork" 2>/dev/null || echo "|")
+    fork_date=$(echo "$fork_info" | cut -d'|' -f1 | sed 's/ ago$//' | sed 's/ hour/h/' | sed 's/ day/d/' | sed 's/ week/w/' | sed 's/ month/mo/' | sed 's/ year/y/' | sed 's/s$//')
+    fork_msg=$(echo "$fork_info" | cut -d'|' -f2-)
+    echo -e "⋮"
+    echo -e "◇ ${BLUE}$fork_short${NC} ${GREEN}$fork_date${NC} $fork_msg"
+    echo -e "┣━┓"
+
+    # Get the branch head commit (short hash for comparison)
+    branch_head_short=$(git rev-parse --short "$branch" 2>/dev/null)
+
+    # Print commits in this branch (reverse order so newest is at bottom)
+    commit_count=$(echo "$commits" | wc -l | tr -d ' ')
+    current_num=0
+    is_first=true
+
+    # Process commits in reverse order (oldest first) - use tail -r on macOS instead of tac
+    echo "$commits" | tail -r | while IFS='|' read -r commit_hash commit_date commit_msg; do
+      current_num=$((current_num + 1))
+      # Format date
+      commit_date=$(echo "$commit_date" | sed 's/ ago$//' | sed 's/ hour/h/' | sed 's/ day/d/' | sed 's/ week/w/' | sed 's/ month/mo/' | sed 's/ year/y/' | sed 's/s$//')
+
+      # The last commit (first in reversed order) is the branch head
+      if [ "$is_first" = true ]; then
+        is_first=false
+        # This is the branch head - show with branch name
+        # Add arrow if this is the current branch
+        if [ "$branch" = "$current_branch" ]; then
+          echo -e "⋮ ${GREEN}●${NC} ${YELLOW}$commit_hash${NC} ${GREEN}$commit_date${NC} ${CYAN}(ᐅ $branch)${NC} $commit_msg"
+        else
+          echo -e "⋮ ${GREEN}●${NC} ${YELLOW}$commit_hash${NC} ${GREEN}$commit_date${NC} ${CYAN}($branch)${NC} $commit_msg"
+        fi
+      else
+        # Regular commit in the branch
+        echo -e "⋮ ${BLUE}◯${NC} ${YELLOW}$commit_hash${NC} ${GREEN}$commit_date${NC} $commit_msg"
+      fi
+
+      # Add vertical spacing between commits (but not after the last one)
+      if [ $current_num -lt $commit_count ]; then
+        echo -e "⋮ ┃"
+      fi
+    done
+  done
+
+# Show current master
+master_hash=$(git rev-parse --short "$baseline" 2>/dev/null)
+master_msg=$(git log --oneline -1 "$baseline" 2>/dev/null | cut -d' ' -f2-)
+echo -e "⋮"
+echo -e "◇ ${YELLOW}$master_hash${NC} ${CYAN}($baseline)${NC} $master_msg"
+
